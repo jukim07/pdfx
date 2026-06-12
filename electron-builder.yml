@@ -1,0 +1,26 @@
+appId: com.pdfx.app
+productName: PDFX
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.prettierignore,.prettierrc.yaml,.editorconfig,dev-app-update.yml,README.md,SPEC.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,yarn.lock}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+fileAssociations:
+  - ext: pdfx
+    name: PDFX Collection
+    description: PDFX multi-document PDF collection
+    role: Viewer
+mac:
+  category: public.app-category.productivity
+win:
+  executableName: pdfx
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+npmRebuild: false
