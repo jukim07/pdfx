@@ -1,8 +1,9 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu, clipboard } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu, clipboard, nativeTheme } from 'electron'
 import { join, basename } from 'path'
 import { existsSync } from 'fs'
 import { readFile, writeFile } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { GLASS_CONFIG, FALLBACK_BG, applyNativeGlass } from './native/glass'
 
 interface OpenedFile {
   name: string
@@ -133,10 +134,12 @@ function createWindow(): void {
     minHeight: 480,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#f7f7f5',
+    ...GLASS_CONFIG,
+    // macOS shows the native glass backdrop (transparent window); elsewhere use
+    // a solid background that matches the current system theme.
     ...(process.platform === 'darwin'
-      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 20, y: 19 } }
-      : {}),
+      ? {}
+      : { backgroundColor: nativeTheme.shouldUseDarkColors ? FALLBACK_BG.dark : FALLBACK_BG.light }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -144,6 +147,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+  applyNativeGlass(mainWindow)
   mainWindow.on('closed', () => {
     mainWindow = null
     rendererReady = false
@@ -187,7 +191,11 @@ if (!gotLock) {
     electronApp.setAppUserModelId('com.pdfx.app')
 
     app.on('browser-window-created', (_, window) => {
-      optimizer.watchWindowShortcuts(window)
+      // zoom: true leaves Cmd +/-/0 alone — otherwise watchWindowShortcuts
+      // preventDefaults Cmd+- in before-input-event, which also kills our
+      // "Zoom Out" menu accelerator (Electron: preventDefault there blocks
+      // menu shortcuts too).
+      optimizer.watchWindowShortcuts(window, { zoom: true })
     })
 
     pendingOpenPaths.push(...collectFileArgs(process.argv.slice(1)))
@@ -248,6 +256,16 @@ if (!gotLock) {
 
     buildMenu()
     createWindow()
+
+    // Keep the non-macOS fallback background in sync with live system theme
+    // changes (macOS follows the system automatically via the native glass).
+    if (process.platform !== 'darwin') {
+      nativeTheme.on('updated', () => {
+        mainWindow?.setBackgroundColor(
+          nativeTheme.shouldUseDarkColors ? FALLBACK_BG.dark : FALLBACK_BG.light
+        )
+      })
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

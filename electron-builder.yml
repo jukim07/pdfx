@@ -9,6 +9,12 @@ files:
   - '!{.prettierignore,.prettierrc.yaml,.editorconfig,dev-app-update.yml,README.md,SPEC.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,yarn.lock}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!scripts/**'
+  # Ship only the compiled native addon, not its sources or build tree.
+  - '!native/**'
+  - 'native/build/Release/*.node'
+asarUnpack:
+  - native/build/Release/*.node
 fileAssociations:
   - ext: pdfx
     name: PDFX Collection

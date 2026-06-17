@@ -1,14 +1,50 @@
 :root {
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --ink: #16161a;
-  --ink-soft: #55555c;
-  --ink-faint: #8e8e94;
-  --hairline: #e6e6e2;
-  --accent: #16161a;
+  /* Dark is the default. The prefers-color-scheme: light block below restores
+     the light palette when the system is set to light, so the whole UI — and
+     the native macOS glass backdrop behind it — tracks the system appearance
+     live. */
+  color-scheme: dark light;
+
+  --surface: #ffffff; /* PDF pages are white in both themes */
+  --ink: rgba(255, 255, 245, 0.92);
+  --ink-soft: rgba(255, 255, 245, 0.6);
+  --ink-faint: rgba(255, 255, 245, 0.4);
+  --hairline: rgba(255, 255, 255, 0.14);
+  --accent: rgba(255, 255, 245, 0.92);
+  --accent-ink: #1a1a1c;
+  --accent-hover: #ffffff;
   --select: #74a9ff;
+  --hover: rgba(255, 255, 255, 0.08);
+  --group-bg: rgba(255, 255, 255, 0.05); /* subtle per-document card */
+  --control: rgba(255, 255, 255, 0.12); /* floating controls over full view */
+  --overlay: rgba(18, 18, 20, 0.72);
+  --overlay-strong: rgba(18, 18, 20, 0.92);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
   --radius: 10px;
-  --page-shadow: 0 1px 2px rgba(20, 20, 24, 0.07), 0 6px 20px rgba(20, 20, 24, 0.06);
+  --page-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.36);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --surface: #ffffff;
+    --ink: #16161a;
+    --ink-soft: #55555c;
+    --ink-faint: #8e8e94;
+    --hairline: #e6e6e2;
+    --accent: #16161a;
+    --accent-ink: #ffffff;
+    --accent-hover: #2e2e34;
+    --select: #74a9ff;
+    --hover: rgba(22, 22, 26, 0.06);
+    --group-bg: rgba(20, 20, 24, 0.045);
+    --control: rgba(255, 255, 255, 0.92);
+    --overlay: rgba(247, 247, 245, 0.7);
+    --overlay-strong: rgba(247, 247, 245, 0.98);
+    --scrollbar-thumb: rgba(22, 22, 26, 0.16);
+    --scrollbar-thumb-hover: rgba(22, 22, 26, 0.32);
+    --page-shadow: 0 1px 2px rgba(20, 20, 24, 0.07), 0 6px 20px rgba(20, 20, 24, 0.06);
+  }
 }
 
 * {
@@ -26,7 +62,10 @@ body,
 body {
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif;
-  background: var(--bg);
+  /* Transparent so the native macOS liquid-glass backdrop shows through. On
+     other platforms the BrowserWindow's solid backgroundColor (--bg) paints
+     behind this instead. */
+  background: transparent;
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -34,6 +73,7 @@ body {
 }
 
 .app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -42,14 +82,20 @@ body {
 /* ---------- Toolbar ---------- */
 
 .toolbar {
+  /* Floats over the content so the scroll area spans the full window height
+     and content scrolls underneath, dissolving into the toolbar (see .content
+     mask). Stays a drag handle; the native window is also movable-by-background. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 14px;
   height: 56px;
   padding: 0 20px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--hairline);
-  background: rgba(247, 247, 245, 0.92);
+  /* No background or divider — the toolbar reads end-to-end over the glass. */
   -webkit-app-region: drag;
 }
 
@@ -105,7 +151,7 @@ body {
 }
 
 .zoom-value:hover {
-  background: rgba(22, 22, 26, 0.06);
+  background: var(--hover);
 }
 
 /* ---------- Buttons ---------- */
@@ -135,11 +181,11 @@ body {
 
 .btn.primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 
 .btn.primary:hover:not(:disabled) {
-  background: #2e2e34;
+  background: var(--accent-hover);
 }
 
 .btn.ghost {
@@ -149,7 +195,7 @@ body {
 }
 
 .btn.ghost:hover:not(:disabled) {
-  background: rgba(22, 22, 26, 0.05);
+  background: var(--hover);
 }
 
 .icon-btn {
@@ -169,7 +215,7 @@ body {
 }
 
 .icon-btn:hover:not(:disabled) {
-  background: rgba(22, 22, 26, 0.06);
+  background: var(--hover);
   color: var(--ink);
 }
 
@@ -183,32 +229,38 @@ body {
 .content {
   flex: 1;
   overflow-y: auto;
+  /* Held transparent across the toolbar zone, then fading in below it, so
+     content stays clear of the floating toolbar and dissolves into the glass
+     as it scrolls up rather than clipping at a hard edge. */
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 32px, #000 80px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 32px, #000 80px);
 }
 
 .doc-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px 0 48px;
+  gap: 20px;
+  /* Top padding clears the floating toolbar + fade so the first row starts in
+     the fully-visible zone. */
+  padding: 80px 0 48px;
 }
 
+/* Each document reads as a simple, roomy group/card. */
 .doc-row {
-  padding: 0 0 14px;
+  margin: 0 28px;
+  padding: 10px 16px 14px;
+  background: var(--group-bg);
+  border-radius: 24px;
 }
 
 /* Headers stay pinned while their document is in view, so the controls
    and the document name are always at hand. */
+/* A plain label that's simply part of the card — no sticky, no own color. */
 .doc-header {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 10px 28px 8px;
-  margin-bottom: 4px;
-  background: rgba(247, 247, 245, 0.88);
-  backdrop-filter: blur(8px);
+  padding: 4px 6px 12px;
 }
 
 .doc-index {
@@ -260,7 +312,7 @@ body {
 .page-strip-inner {
   display: flex;
   gap: 18px;
-  padding: 4px 28px 16px;
+  padding: 4px 8px 16px;
   width: max-content;
 }
 
@@ -268,7 +320,7 @@ body {
   position: relative;
   flex-shrink: 0;
   background: var(--surface);
-  border-radius: 4px;
+  border-radius: 10px;
   box-shadow: var(--page-shadow);
   overflow: hidden;
   cursor: pointer;
@@ -305,7 +357,7 @@ body {
   right: 8px;
   font-size: 10px;
   font-weight: 500;
-  color: var(--ink-faint);
+  color: rgba(40, 40, 45, 0.55);
   background: rgba(255, 255, 255, 0.85);
   border-radius: 4px;
   padding: 1px 5px;
@@ -321,17 +373,18 @@ body {
 /* ---------- Compact mode (zoomed-out overview) ---------- */
 
 .doc-list.compact {
-  gap: 2px;
-  padding-top: 8px;
+  gap: 10px;
+  padding-top: 80px;
 }
 
 .doc-list.compact .doc-row {
-  padding: 0 0 6px;
+  margin: 0 16px;
+  padding: 6px 10px 8px;
+  border-radius: 16px;
 }
 
 .doc-list.compact .doc-header {
-  padding: 4px 28px 3px;
-  margin-bottom: 2px;
+  padding: 2px 4px 6px;
 }
 
 .doc-list.compact .doc-index {
@@ -348,11 +401,11 @@ body {
 
 .doc-list.compact .page-strip-inner {
   gap: 8px;
-  padding: 2px 28px 6px;
+  padding: 2px 6px 8px;
 }
 
 .doc-list.compact .page {
-  border-radius: 2px;
+  border-radius: 5px;
   box-shadow: 0 1px 3px rgba(20, 20, 24, 0.1);
 }
 
@@ -372,7 +425,7 @@ body {
 
 .page-strip::-webkit-scrollbar-thumb,
 .content::-webkit-scrollbar-thumb {
-  background: rgba(22, 22, 26, 0.16);
+  background: var(--scrollbar-thumb);
   border-radius: 8px;
   background-clip: padding-box;
   border: 2px solid transparent;
@@ -380,7 +433,7 @@ body {
 
 .page-strip::-webkit-scrollbar-thumb:hover,
 .content::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(22, 22, 26, 0.32);
+  background-color: var(--scrollbar-thumb-hover);
 }
 
 .page-strip::-webkit-scrollbar-track,
@@ -391,7 +444,7 @@ body {
 /* ---------- Add row ---------- */
 
 .add-row {
-  margin: 4px 28px 0;
+  margin: 4px 14px 0;
   padding: 14px;
   font-family: inherit;
   font-size: 13px;
@@ -409,8 +462,8 @@ body {
 
 .add-row:hover:not(:disabled) {
   color: var(--ink);
-  border-color: #c9c9c4;
-  background: rgba(255, 255, 255, 0.6);
+  border-color: var(--ink-faint);
+  background: var(--hover);
 }
 
 .add-row:disabled {
@@ -434,7 +487,7 @@ body {
   align-items: center;
   gap: 14px;
   text-align: center;
-  border: 1.5px dashed #d8d8d3;
+  border: 1.5px dashed var(--hairline);
   border-radius: 20px;
   padding: 64px 72px;
   max-width: 480px;
@@ -459,7 +512,7 @@ body {
 .empty-card code {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 12px;
-  background: rgba(22, 22, 26, 0.06);
+  background: var(--hover);
   border-radius: 4px;
   padding: 1px 5px;
 }
@@ -477,7 +530,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(247, 247, 245, 0.7);
+  background: var(--overlay);
   backdrop-filter: blur(2px);
   border: 2px dashed var(--ink);
   border-radius: 16px;
@@ -487,8 +540,8 @@ body {
 .drop-overlay-card {
   font-size: 15px;
   font-weight: 600;
-  background: var(--ink);
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-ink);
   padding: 10px 22px;
   border-radius: 999px;
   box-shadow: 0 8px 28px rgba(20, 20, 24, 0.25);
@@ -500,7 +553,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(247, 247, 245, 0.98);
+  background: var(--overlay-strong);
   animation: full-view-in 0.16s ease;
 }
 
@@ -565,7 +618,7 @@ body {
 .full-page {
   position: relative;
   background: var(--surface);
-  border-radius: 4px;
+  border-radius: 10px;
   overflow: hidden;
   box-shadow:
     0 2px 6px rgba(20, 20, 24, 0.08),
@@ -584,7 +637,7 @@ body {
   justify-content: center;
   border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--control);
   color: var(--ink-soft);
   box-shadow: 0 2px 10px rgba(20, 20, 24, 0.14);
   cursor: pointer;
@@ -625,7 +678,7 @@ body {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--ink-soft);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--control);
   border-radius: 999px;
   padding: 4px 12px;
   box-shadow: 0 1px 6px rgba(20, 20, 24, 0.1);
@@ -641,8 +694,8 @@ body {
   z-index: 20;
   font-size: 13px;
   font-weight: 500;
-  background: var(--ink);
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-ink);
   padding: 9px 18px;
   border-radius: 999px;
   box-shadow: 0 8px 28px rgba(20, 20, 24, 0.3);
