@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { findConverter } from '../pdfx/convert'
+import { findConverter } from '@pdfx/core'
 import { importIntoDocs, loadIncomingPages } from '../pdfx/source'
 import { dedupeNames } from './names'
 import { applyExternalDrop } from './external-drop'

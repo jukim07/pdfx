@@ -1,6 +1,5 @@
 import { getDocument } from 'pdfjs-dist'
-import { partitionPages, readManifest, stripExtension } from '@pdfx/core'
-import { findConverter } from './convert'
+import { findConverter, partitionPages, readManifest, stripExtension } from '@pdfx/core'
 import type { DocEntry, PageEntry, PdfSource } from '../types'
 
 interface PageSize {

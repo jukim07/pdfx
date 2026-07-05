@@ -9,7 +9,8 @@
     "packages/core/src/format.ts",
     "packages/core/src/build.ts",
     "packages/core/src/images.ts",
-    "packages/core/src/model.ts"
+    "packages/core/src/model.ts",
+    "packages/core/src/convert.ts"
   ],
   "compilerOptions": {
     "composite": true,
