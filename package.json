@@ -16,6 +16,8 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "yarn typecheck:node && yarn typecheck:web",
     "build:native": "node scripts/build-native.mjs",
+    "build:packages": "yarn workspace @pdfx/core build && yarn workspace @pdfx/cli build",
+    "test:packages": "yarn workspace @pdfx/core test && yarn workspace @pdfx/cli test",
     "start": "electron-vite preview",
     "dev": "electron-vite dev --watch",
     "build": "yarn typecheck && electron-vite build",
