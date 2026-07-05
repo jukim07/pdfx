@@ -20,6 +20,7 @@ export default defineConfig({
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
+        '@pdfx/core': resolve('packages/core/src/index.ts'),
         'tesseract.js': 'tesseract.js/dist/tesseract.esm.min.js'
       }
     },

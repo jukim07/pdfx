@@ -1,7 +1,7 @@
 import { PDFDocument } from 'pdf-lib'
 
-import { MANIFEST_NAME, PDFX_VERSION } from './format'
-import type { ExportDocument, ExportPage, PdfxManifest } from './format'
+import { MANIFEST_NAME, PDFX_VERSION } from './format.js'
+import type { ExportDocument, ExportPage, PdfxManifest } from './format.js'
 
 export async function buildPdf(pages: ExportPage[]): Promise<Uint8Array> {
   const output = await PDFDocument.create()

@@ -1,6 +1,6 @@
 import { findConverter } from '../pdfx/convert'
 import { importIntoDocs, loadSource, pagesFromSource } from '../pdfx/source'
-import { partitionPages, readManifest, stripExtension } from '../pdfx/format'
+import { partitionPages, readManifest, stripExtension } from '@pdfx/core'
 import type { DocEntry, PageEntry } from '../types'
 import type { DropTarget } from '../canvas/layout'
 import type { IncomingFile } from './types'

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { zipSync } from 'fflate'
-import { buildPdf, buildPdfx, stripExtension } from '../pdfx/format'
+import { buildPdf, buildPdfx, stripExtension } from '@pdfx/core'
 import { toExportPage } from '../pdfx/source'
 import type { DocEntry } from '../types'
 
