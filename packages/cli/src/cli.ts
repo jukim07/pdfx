@@ -60,7 +60,7 @@ async function runInfo(rest: string[], io: CliIo): Promise<number> {
   }
   try {
     const bytes = await loadInput(file)
-    const pdf = await PDFDocument.load(bytes)
+    const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true })
     const manifest: PdfxManifest | null = await parseManifest(bytes)
     const docs = manifest
       ? manifest.documents.map((d) => ({ name: d.name, pages: d.pages }))

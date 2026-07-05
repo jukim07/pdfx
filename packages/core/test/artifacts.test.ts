@@ -93,6 +93,7 @@ describe('extractArtifacts', () => {
 
     // partitionPages fallback name for plain PDF with no pdfx manifest
     expect(manifest.docs[0].name).toBe('Document')
+    expect(manifest.pages[0].textMethod).toBe('ocr')
     expect(await readFile(join(outDir, 'Document.md'), 'utf8')).toContain('SCANNED')
   }, 120_000)
 })

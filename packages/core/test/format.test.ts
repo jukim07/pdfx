@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, PDFName } from 'pdf-lib'
 import { buildPdfx, parseManifest, partitionPages, stripExtension } from '../src/index.js'
 
 async function onePagePdf(): Promise<Uint8Array> {
@@ -54,5 +54,32 @@ describe('pdfx manifest round-trip', () => {
   it('stripExtension strips .pdf and .pdfx case-insensitively', () => {
     expect(stripExtension('a.pdfx')).toBe('a')
     expect(stripExtension('b.PDF')).toBe('b')
+  })
+
+  it('parseManifest returns null when catalog /Names is wrong type (not a PDFDict)', async () => {
+    // Build a PDF where catalog /Names entry is a PDFArray instead of the expected PDFDict.
+    // pdf-lib's lookupMaybe throws "Expected instance of PDFDict, but got instance of PDFArray"
+    // when the type guard fails — the fix wraps that traversal in try/catch and returns null.
+    const doc = await PDFDocument.create()
+    doc.addPage([200, 200])
+    // Set catalog /Names to an array (wrong type — should be a dict)
+    doc.catalog.set(PDFName.of('Names'), doc.context.obj([]))
+    const bytes = await doc.save()
+    await expect(parseManifest(bytes)).resolves.toBeNull()
+  })
+
+  it('parseManifest returns null when manifest JSON lacks the pdfx field', async () => {
+    // Embed a manifest JSON without the required pdfx version field.
+    // validateManifest must reject it and parseManifest must return null.
+    const doc = await PDFDocument.create()
+    doc.addPage([200, 200])
+    const badManifest = { documents: [{ name: 'Doc', pages: 1 }] }
+    await doc.attach(
+      new TextEncoder().encode(JSON.stringify(badManifest)),
+      'pdfx-manifest.json',
+      { mimeType: 'application/json' }
+    )
+    const bytes = await doc.save()
+    await expect(parseManifest(bytes)).resolves.toBeNull()
   })
 })

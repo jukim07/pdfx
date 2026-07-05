@@ -54,6 +54,7 @@ export function stripExtension(filename: string): string {
 function validateManifest(manifest: PdfxManifest): PdfxManifest | null {
   const valid =
     manifest &&
+    typeof manifest.pdfx === 'string' &&
     Array.isArray(manifest.documents) &&
     manifest.documents.every(
       (d) => typeof d.name === 'string' && Number.isInteger(d.pages) && d.pages > 0
@@ -62,10 +63,15 @@ function validateManifest(manifest: PdfxManifest): PdfxManifest | null {
 }
 
 export async function readManifest(pdf: PDFDocumentProxy): Promise<PdfxManifest | null> {
-  const attachments = (await pdf.getAttachments()) as Record<
-    string,
-    { filename?: string; content: Uint8Array }
-  > | null
+  let attachments: Record<string, { filename?: string; content: Uint8Array }> | null
+  try {
+    attachments = (await pdf.getAttachments()) as Record<
+      string,
+      { filename?: string; content: Uint8Array }
+    > | null
+  } catch {
+    return null
+  }
   if (!attachments) return null
 
   for (const [key, attachment] of Object.entries(attachments)) {
@@ -95,9 +101,14 @@ export async function parseManifest(bytes: Uint8Array): Promise<PdfxManifest | n
   } catch {
     return null
   }
-  const names = pdf.catalog.lookupMaybe(PDFName.of('Names'), PDFDict)
-  const embedded = names?.lookupMaybe(PDFName.of('EmbeddedFiles'), PDFDict)
-  const entries = embedded?.lookupMaybe(PDFName.of('Names'), PDFArray)
+  let entries: PDFArray | undefined
+  try {
+    const names = pdf.catalog.lookupMaybe(PDFName.of('Names'), PDFDict)
+    const embedded = names?.lookupMaybe(PDFName.of('EmbeddedFiles'), PDFDict)
+    entries = embedded?.lookupMaybe(PDFName.of('Names'), PDFArray)
+  } catch {
+    return null
+  }
   if (!entries) return null
   for (let i = 0; i + 1 < entries.size(); i += 2) {
     const nameObj = entries.lookup(i)
