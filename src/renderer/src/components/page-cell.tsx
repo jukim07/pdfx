@@ -132,9 +132,15 @@ function PageCellImpl({
         </button>
         <button
           type="button"
-          title="Crop page"
+          title={
+            (page.rotation ?? 0) !== 0
+              ? 'Reset rotation to crop this page'
+              : 'Crop page'
+          }
+          disabled={(page.rotation ?? 0) !== 0}
           onClick={(e) => {
             e.stopPropagation()
+            if ((page.rotation ?? 0) !== 0) return
             onStartCrop(docId, page.id)
           }}
         >

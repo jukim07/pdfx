@@ -156,7 +156,9 @@ describe('assets and -f guard', () => {
   })
 
   it('refuses to overwrite without -f (exit 1), allows with -f', async () => {
-    const out = join(tmp, 'rotated.pdf') // exists from the rotate test
+    const out = join(tmp, 'overwrite-guard.pdf')
+    // Seed the output file so the overwrite guard has something to trip on.
+    await writeFile(out, await makePdf(1))
     expect(await runCli(['rotate', pdf4, '--angle', '90', '-o', out], collectIo().io)).toBe(EXIT_ERROR)
     expect(await runCli(['rotate', pdf4, '--angle', '90', '-o', out, '-f'], collectIo().io)).toBe(EXIT_OK)
   })
