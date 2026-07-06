@@ -145,6 +145,24 @@ describe('CLI watermark', () => {
     expect(err.join('\n')).toContain('pdfx watermark-rm:')
   })
 
+  it('pdfx watermark-rm --list --json emits [] when no candidates (Finding D: JSON contract)', async () => {
+    // A PDF with no repeated text ops → zero candidates → --json must emit [] not prose
+    const dir = await mkdtemp(join(tmpdir(), 'wm-'))
+    const input = join(dir, 'in.pdf')
+    const doc = await PDFDocument.create()
+    for (let i = 0; i < 3; i++) {
+      const page = doc.addPage([612, 792])
+      page.drawText(`Unique page ${i}: ${i * 1234}`, { x: 50, y: 740, size: 12 })
+    }
+    await writeFile(input, await doc.save())
+    const { io, out } = collectIo()
+    const code = await runCli(['watermark-rm', input, '--list', '--json'], io)
+    expect(code).toBe(EXIT_OK)
+    const parsed = JSON.parse(out.join('\n'))
+    expect(Array.isArray(parsed)).toBe(true)
+    expect(parsed).toHaveLength(0)
+  })
+
   it('pdfx watermark-rm --strip defaults output path to <input>.stripped.pdf', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'wm-'))
     const input = join(dir, 'in.pdf')

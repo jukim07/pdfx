@@ -85,12 +85,11 @@ export async function runWatermarkRm(rest: string[], io: CliIo): Promise<number>
 
     if (parsed.values.list) {
       const candidates = await findWatermarkCandidates(bytes)
-      if (candidates.length === 0) {
-        io.out('No watermark candidates detected.')
-        return EXIT_OK
-      }
       if (parsed.values.json) {
+        // Always emit valid JSON in --json mode; empty array when no candidates found.
         io.out(JSON.stringify(candidates, null, 2))
+      } else if (candidates.length === 0) {
+        io.out('No watermark candidates detected.')
       } else {
         for (const c of candidates) {
           io.out(`[${c.id}] ${c.description} (coverage: ${(c.pageCoverage * 100).toFixed(0)}%)`)

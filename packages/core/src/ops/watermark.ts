@@ -1,4 +1,4 @@
-import { PDFDocument, PDFArray, PDFName, PDFHexString, PDFRef, PDFRawStream, degrees, rgb } from 'pdf-lib'
+import { PDFDocument, PDFArray, PDFName, PDFHexString, PDFRef, PDFRawStream, StandardFonts, degrees, rgb } from 'pdf-lib'
 import type { PDFPage } from 'pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { OPS } from 'pdfjs-dist'
@@ -6,16 +6,15 @@ import { inflateSync, deflateSync } from 'zlib'
 import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { createRequire } from 'module'
 
-// @pdf-lib/fontkit ships CJS-only (no exports field); use createRequire so
-// NodeNext ESM module resolution doesn't reject the package.
-const _require = createRequire(import.meta.url)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fontkit = _require('@pdf-lib/fontkit') as any
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+// Cross-format module dir: CJS transforms (Playwright) provide __dirname; true ESM
+// lacks it, so fall back to import.meta.url via indirect eval — indirect so CJS
+// parsers never see the import.meta token.
+function moduleDir(): string {
+  if (typeof __dirname !== 'undefined') return __dirname
+  const url = new Function('return import.meta.url')() as string
+  return dirname(fileURLToPath(url))
+}
 
 export interface WatermarkOpts {
   text: string
@@ -99,6 +98,12 @@ async function addWatermarkAnnot(
     const { width, height } = page.getSize()
     const context = doc.context
 
+    // Embed Helvetica so the AP stream's /F1 reference resolves in all viewers.
+    const helv = await doc.embedFont(StandardFonts.Helvetica)
+
+    // Escape text for PDF literal string: backslash, open-paren, close-paren must be escaped.
+    const escapedText = text.replace(/[\\()]/g, '\\$&')
+
     // Minimal appearance stream: draw text at center, rotated
     const rad = (angle * Math.PI) / 180
     const cosA = Math.cos(rad)
@@ -113,7 +118,7 @@ async function addWatermarkAnnot(
       `${cosA.toFixed(4)} ${sinA.toFixed(4)} ${(-sinA).toFixed(4)} ${cosA.toFixed(4)} ${cx.toFixed(2)} ${cy.toFixed(2)} cm`,
       'BT',
       `0 0 Td`,
-      `(${text}) Tj`,
+      `(${escapedText}) Tj`,
       'ET',
       'Q',
     ].join('\n')
@@ -121,7 +126,10 @@ async function addWatermarkAnnot(
     const apStream = context.stream(streamContent, {
       Type: 'XObject',
       Subtype: 'Form',
-      BBox: [-width / 2, -height / 2, width / 2, height / 2]
+      BBox: [-width / 2, -height / 2, width / 2, height / 2],
+      // Attach the font resource so viewers can render /F1 — without this, most
+      // renderers silently produce a blank appearance stream.
+      Resources: context.obj({ Font: context.obj({ F1: helv.ref }) })
     })
     const apRef = context.register(apStream)
     const apDict = context.obj({ N: apRef })
@@ -213,6 +221,12 @@ async function collectTextHits(bytes: Uint8Array): Promise<{ hits: TextHit[]; nu
     // Text matrix: set by OPS.setTextMatrix (Tm op). pdf-lib emits Tm to
     // position each text object; this is NOT the same as OPS.transform (cm).
     let currentTm: Matrix6 = identityMatrix()
+    // BOUNDARY: OPS.moveText (Td/TD operators) is NOT tracked here. Foreign PDFs
+    // that position text via Td/TD instead of Tm will leave currentTm at its last
+    // Tm value (identity if none preceded). This means text positioned via Td/TD
+    // gets an identity/stale Tm → signatures may conflate positions, and strip
+    // patterns anchored on the Tm value match nothing (fail-safe: under-removal,
+    // not over-removal). Re-detection will report surviving watermark instances.
 
     for (let j = 0; j < fnArray.length; j++) {
       const fn = fnArray[j]
@@ -537,9 +551,9 @@ async function stripTextWatermark(bytes: Uint8Array, candidateId: string): Promi
         // We use the pdfjs-decoded value directly (not roundMatrix-rounded) so
         // the match is as precise as the stream itself.
         const escapeTmVal = (v: number): string => {
-          // Escape the decimal point; the stream value may have many digits but
-          // we match it as a verbatim prefix up to the full precision pdfjs gave us.
-          return String(v).replace(/\./g, '\\.').replace(/-/, '-?')
+          // Escape only the decimal point; keep the sign literal so a negative
+          // value doesn't accidentally match its positive counterpart.
+          return String(v).replace(/\./g, '\\.')
         }
         // Strategy: anchor on the translated values (e5, e6 — x,y position) which
         // are always integers or simple decimals and unique between watermark and body.
@@ -674,7 +688,7 @@ function getOpenDyslexicPath(): string {
     return join((process as unknown as { resourcesPath: string }).resourcesPath, 'fonts', 'OpenDyslexic-Regular.otf')
   }
   // CLI / test: repo-relative (this file is packages/core/src/ops/watermark.ts → 4 levels up to root)
-  return join(__dirname, '../../../../resources/fonts/OpenDyslexic-Regular.otf')
+  return join(moduleDir(), '../../../../resources/fonts/OpenDyslexic-Regular.otf')
 }
 
 interface TextRun {
@@ -722,6 +736,11 @@ export async function rebuildLegible(bytes: Uint8Array, opts?: LegibleOpts): Pro
   } catch (err) {
     throw new Error(`rebuildLegible: OpenDyslexic font not found at ${fontPath} — set PDFX_FONT_DIR or check resources/fonts/. Cause: ${(err as Error).message}`)
   }
+
+  // @pdf-lib/fontkit ships CJS-only (no exports field). Dynamic import survives
+  // both true-ESM and CJS transforms (e.g. Playwright Jest runner).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fontkit = ((await import('@pdf-lib/fontkit')) as any).default ?? (await import('@pdf-lib/fontkit'))
 
   // Extract text runs from source via pdfjs
   const allRuns = await extractTextRuns(bytes)
