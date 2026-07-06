@@ -330,7 +330,9 @@ export default function App(): React.JSX.Element {
     onClearSelection: collection.clearSelection,
     findOpen: find.open,
     onOpenFind: find.openFind,
-    onCloseFind: find.closeFind
+    onCloseFind: find.closeFind,
+    onUndo: collection.undo,
+    onRedo: collection.redo
   })
 
   useTestBridge(
@@ -431,6 +433,10 @@ export default function App(): React.JSX.Element {
           onToggleCompareMode={collection.toggleCompareMode}
           axisFlip={axisFlip}
           onToggleAxisFlip={toggleAxisFlip}
+          canUndo={collection.canUndo}
+          canRedo={collection.canRedo}
+          onUndo={collection.undo}
+          onRedo={collection.redo}
           onZoomIn={() => canvasRef.current?.zoomIn()}
           onZoomOut={() => canvasRef.current?.zoomOut()}
           onZoomReset={() => canvasRef.current?.reset()}

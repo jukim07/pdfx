@@ -26,6 +26,11 @@ interface ToolbarProps {
   // Added by E1:
   axisFlip: boolean
   onToggleAxisFlip: () => void
+  // Added by E4:
+  canUndo: boolean
+  canRedo: boolean
+  onUndo: () => void
+  onRedo: () => void
 }
 
 const isMac = window.api.platform === 'darwin'
@@ -52,7 +57,11 @@ export function Toolbar({
   compareMode,
   onToggleCompareMode,
   axisFlip,
-  onToggleAxisFlip
+  onToggleAxisFlip,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo
 }: ToolbarProps): React.JSX.Element {
   const redactCount = redactDrafts?.length ?? 0
   return (
@@ -96,6 +105,16 @@ export function Toolbar({
               <path d="M12 5v14" />
               <path d="M5 12h14" />
             </svg>
+          </button>
+        </div>
+      )}
+      {documentCount > 0 && (
+        <div className="undo-cluster">
+          <button className="icon-btn" title="Undo (⌘Z)" onClick={onUndo} disabled={!canUndo}>
+            ↩
+          </button>
+          <button className="icon-btn" title="Redo (⌘⇧Z)" onClick={onRedo} disabled={!canRedo}>
+            ↪
           </button>
         </div>
       )}

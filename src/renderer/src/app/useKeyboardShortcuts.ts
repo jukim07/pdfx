@@ -11,6 +11,9 @@ interface KeyboardShortcutDeps {
   findOpen: boolean
   onOpenFind: () => void
   onCloseFind: () => void
+  // Added by E4:
+  onUndo: () => void
+  onRedo: () => void
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -27,11 +30,23 @@ export function useKeyboardShortcuts({
   onClearSelection,
   findOpen,
   onOpenFind,
-  onCloseFind
+  onCloseFind,
+  onUndo,
+  onRedo
 }: KeyboardShortcutDeps): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const mod = event.metaKey || event.ctrlKey
+      if (mod && !event.shiftKey && event.key.toLowerCase() === 'z' && !isEditableTarget(event.target)) {
+        event.preventDefault()
+        onUndo()
+        return
+      }
+      if (mod && event.shiftKey && event.key.toLowerCase() === 'z' && !isEditableTarget(event.target)) {
+        event.preventDefault()
+        onRedo()
+        return
+      }
       if (mod && event.key.toLowerCase() === 'f' && !isEditableTarget(event.target)) {
         event.preventDefault()
         onOpenFind()
@@ -65,6 +80,8 @@ export function useKeyboardShortcuts({
     onClearSelection,
     findOpen,
     onOpenFind,
-    onCloseFind
+    onCloseFind,
+    onUndo,
+    onRedo
   ])
 }
