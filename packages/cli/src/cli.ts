@@ -552,10 +552,14 @@ async function runStamp(rest: string[], io: CliIo): Promise<number> {
   }
 
   const atStr = parsed.values.at
-  const [xStr, yStr] = atStr.split(',')
-  const x = Number(xStr)
-  const y = Number(yStr)
-  if (Number.isNaN(x) || Number.isNaN(y) || xStr === undefined || yStr === undefined) {
+  const atParts = atStr.split(',')
+  if (atParts.length !== 2) {
+    io.err(`pdfx stamp: --at must be "x,y" in PDF points; got "${atStr}"`)
+    return EXIT_ERROR
+  }
+  const x = Number(atParts[0])
+  const y = Number(atParts[1])
+  if (Number.isNaN(x) || Number.isNaN(y)) {
     io.err(`pdfx stamp: --at must be "x,y" in PDF points; got "${atStr}"`)
     return EXIT_ERROR
   }
