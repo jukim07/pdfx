@@ -1,4 +1,4 @@
-import { PDFDocument, PDFArray, PDFName, degrees, rgb } from 'pdf-lib'
+import { PDFDocument, PDFArray, PDFName, PDFHexString, degrees, rgb } from 'pdf-lib'
 
 export interface WatermarkOpts {
   text: string
@@ -73,11 +73,9 @@ async function addWatermarkAnnot(
   fontSize: number,
   color: [number, number, number]
 ): Promise<Uint8Array> {
-  // <!-- unverified-api -->
-  // pdf-lib's PDFContext.obj() and PDFPage.node.set() are internal APIs not exposed
-  // in the public .d.ts. Verify these APIs exist before executing this branch.
+  // NOTE: pdf-lib's PDFContext.obj() and PDFPage.node.set() are internal APIs not
+  // exposed in the public .d.ts. Verify these APIs exist before executing this branch.
   // If unavailable, fall back to the stream variant.
-  const { PDFHexString } = await import('pdf-lib')
 
   for (let i = 0; i < doc.getPageCount(); i++) {
     const page = doc.getPage(i)
