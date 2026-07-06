@@ -42,4 +42,18 @@ describe('importIntoDocs provenance', () => {
     expect(docs).toHaveLength(1)
     expect(docs[0].source).toBeUndefined()
   })
+
+  it('passes converted:true through to the DocEntry source unchanged', async () => {
+    const bytes = new Uint8Array([1, 2, 3])
+    const src: PdfxManifestDocumentSource = {
+      filename: 'original.docx',
+      sha256: 'cafebabe',
+      importedAt: '2026-07-06T09:00:00.000Z',
+      converted: true
+    }
+    const docs = await importIntoDocs('original.pdf', bytes, src)
+    expect(docs).toHaveLength(1)
+    expect(docs[0].source).toEqual(src)
+    expect(docs[0].source?.converted).toBe(true)
+  })
 })

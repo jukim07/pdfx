@@ -75,9 +75,9 @@ function DocHeaderImpl({
               ? [
                   doc.name,
                   `File: ${doc.source.filename}`,
-                  `SHA-256: ${doc.source.sha256}`,
-                  `Imported: ${doc.source.importedAt}`,
-                  doc.source.converted ? 'Converted from original format' : ''
+                  `SHA-256: ${doc.source.sha256.slice(0, 16)}…`,
+                  `Imported: ${new Date(doc.source.importedAt).toLocaleString()}`,
+                  doc.source.converted ? '(converted from original format)' : ''
                 ]
                   .filter(Boolean)
                   .join('\n')

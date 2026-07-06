@@ -1,5 +1,6 @@
 import { findConverter, partitionPages, readManifest, stripExtension } from '@pdfx/core'
 import { importIntoDocs, loadSource, pagesFromSource } from '../pdfx/source'
+import { buildProvenance } from './provenance'
 import type { DocEntry, PageEntry } from '../types'
 import type { DropTarget } from '../canvas/layout'
 import type { IncomingFile } from './types'
@@ -43,10 +44,13 @@ async function dropSingleFileInto(
   const manifest = await readManifest(source.pdf)
   const parts = partitionPages(manifest, source.pdf.numPages, stripExtension(file.name))
   if (parts.length > 1) {
+    // Same source object — all partitions originate from the same imported file.
+    const provenance = buildProvenance(file, false)
     const newDocs: DocEntry[] = parts.map((part) => ({
       id: crypto.randomUUID(),
       name: part.name,
-      pages: pagesFromSource(source, sizes, part.indices)
+      pages: pagesFromSource(source, sizes, part.indices),
+      source: provenance
     }))
     deps.spliceDocsAfter(target.docId, newDocs)
   } else {
@@ -70,7 +74,8 @@ async function dropFilesAsNewDocs(
     const conv = findConverter(file.name, file.data)
     const name = conv ? conv.rename(file.name) : file.name
     const data = conv ? await conv.toPdf(file.name, file.data, undefined, file.path) : file.data
-    newDocs.push(...(await importIntoDocs(name, data)))
+    const provenance = buildProvenance(file, conv !== null)
+    newDocs.push(...(await importIntoDocs(name, data, provenance)))
   }
   deps.spliceDocsAfter(anchorDocId, newDocs)
 }
