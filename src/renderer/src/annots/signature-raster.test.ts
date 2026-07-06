@@ -15,4 +15,18 @@ describe('rasterizeSignature', () => {
     expect(png[2]).toBe(0x4e)
     expect(png[3]).toBe(0x47)
   })
+
+  it('skips degenerate strokes with < 4 points and returns valid PNG', async () => {
+    const png = await rasterizeSignature(
+      [{ points: [10, 10] }],
+      120,
+      60
+    )
+    expect(png.length).toBeGreaterThan(0)
+    // PNG magic bytes verify it's a valid PNG
+    expect(png[0]).toBe(0x89)
+    expect(png[1]).toBe(0x50)
+    expect(png[2]).toBe(0x4e)
+    expect(png[3]).toBe(0x47)
+  })
 })

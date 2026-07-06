@@ -55,6 +55,14 @@ export function SignaturePad({ onSave, onCancel }: SignaturePadProps): React.JSX
           drawing.current = false
           last.current = null
         }}
+        onPointerCancel={() => {
+          drawing.current = false
+          last.current = null
+        }}
+        onPointerLeave={() => {
+          drawing.current = false
+          last.current = null
+        }}
       />
       <div className="signature-actions">
         <button
