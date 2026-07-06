@@ -103,7 +103,7 @@ export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): Rea
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
-      onMouseLeave={() => setDrag(null)}
+      onMouseLeave={() => { dragRef.current = null; setDrag(null) }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => { e.stopPropagation(); onCancel() }}
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
