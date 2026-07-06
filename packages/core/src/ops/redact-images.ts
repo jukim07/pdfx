@@ -45,11 +45,36 @@ function containedIn(box: Rect, r: Rect): boolean {
 }
 
 /**
+ * Collect every PDFRef referenced from any page's /Resources /XObject dict,
+ * excluding the current page's own xobjects dict so we can tell if a ref is
+ * shared with at least one other page before deleting it.
+ */
+function otherPageXObjectRefs(doc: PDFDocument, currentPage: PDFPage): Set<PDFRef> {
+  const shared = new Set<PDFRef>()
+  const currentNode = currentPage.node
+  for (const p of doc.getPages()) {
+    if (p.node === currentNode) continue
+    const xobj = p.node.Resources()?.lookupMaybe(PDFName.of('XObject'), PDFDict)
+    if (!xobj) continue
+    for (const key of xobj.keys()) {
+      const val = xobj.get(key as PDFName)
+      if (val instanceof PDFRef) shared.add(val)
+    }
+  }
+  return shared
+}
+
+/**
  * Walk the content stream, tracking the CTM (q/Q stack + cm ops). For each Do op
  * that paints an image XObject whose device bbox is fully contained in any redaction
  * region: drop the Do op, remove the XObject entry from the page Resources dict, and
- * ctx.delete(ref) so the image bytes leave the file. Inline images in the same position
- * are also dropped (their bytes live in the stream, so stripOps removes them).
+ * delete the object from the context so image bytes leave the file — UNLESS the same
+ * ref is referenced by another page's Resources /XObject (e.g. a shared logo). In
+ * that case the Do op and this page's Resources entry are still removed (the image no
+ * longer paints on this page), but the object bytes are kept because another page
+ * legitimately uses them.
+ * Inline images in the same position are also dropped (their bytes live in the stream,
+ * so stripOps removes them).
  */
 export function removeContainedImages(
   doc: PDFDocument,
@@ -60,6 +85,9 @@ export function removeContainedImages(
   const ops = tokenizeContent(src)
   const resources = page.node.Resources()
   const xobjects = resources?.lookupMaybe(PDFName.of('XObject'), PDFDict)
+
+  // Lazily computed on first image hit to avoid scanning all pages on text-only docs.
+  let sharedRefs: Set<PDFRef> | undefined
 
   const remove = new Set<ContentOp>()
   const deadNames: string[] = []
@@ -86,7 +114,15 @@ export function removeContainedImages(
       if (isImage && rects.some((r) => containedIn(unitSquareBox(ctm), r))) {
         remove.add(op)
         deadNames.push(name)
-        if (ref != null) doc.context.delete(ref) // bytes leave the file
+        if (ref != null) {
+          // Only evict the object bytes if no other page holds a reference to it.
+          // If another page uses the same image (e.g. a logo on every page), keep
+          // the object alive; only this page's Resources entry and Do op are removed.
+          sharedRefs ??= otherPageXObjectRefs(doc, page)
+          if (!sharedRefs.has(ref)) {
+            doc.context.delete(ref) // bytes leave the file
+          }
+        }
       }
     } else if (op.operator === 'INLINE_IMAGE') {
       // Inline images paint into the current CTM just like Do. Their bytes are
