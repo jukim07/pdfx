@@ -27,7 +27,12 @@ export async function launchApp(): Promise<Harness> {
   const page = await app.firstWindow()
   await page.waitForSelector('.app', { state: 'visible' })
   // The bridge is assigned on App mount; its absence means the seam is broken.
-  await page.waitForFunction(() => (window as never as { __pdfxTest?: unknown }).__pdfxTest !== undefined)
+  // 20 s budget documented explicitly — first-boot can be slow; default 30 s masks nothing.
+  await page.waitForFunction(
+    () => (window as never as { __pdfxTest?: unknown }).__pdfxTest !== undefined,
+    undefined,
+    { timeout: 20_000 }
+  )
   return { app, page, close: () => app.close() }
 }
 

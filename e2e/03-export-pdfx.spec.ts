@@ -45,6 +45,7 @@ test('exports .pdfx from GUI; pdfx info + extract verify it', async () => {
     // Check 3: pdfx extract --json writes manifest + pages + markdown; SENTINEL survives.
     const extract = runCli(['extract', pdfxPath, '-o', bundleDir, '--json'])
     expect(extract.code).toBe(0)
+    expect(extract.json).toBeDefined()
     const manifest = extract.json as ArtifactManifest
 
     // pages/pNNNN.png exist for each page
