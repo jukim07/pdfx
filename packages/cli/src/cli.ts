@@ -11,6 +11,7 @@ import {
 import { extractArtifacts, extractAssets, type ExtractArtifactsOptions } from '@pdfx/core/extract'
 import { watchExtract } from './watch.js'
 import { runRedact } from './redact.js'
+import { runWatermark, runWatermarkRm } from './watermark.js'
 
 export const EXIT_OK = 0
 export const EXIT_ERROR = 1
@@ -36,6 +37,8 @@ const USAGE = `Usage:
   pdfx stamp <file.pdf> --image <png> --page <n> --at <x,y> --w <width> [-o <out.pdf>]
   pdfx redact <file.pdf> (--find <text>|--regex <re>|--box <page:x,y,w,h>...) [--mode black|blur|rasterize] [-p <ranges>] [-o <out.pdf>]
     --rasterize  robust fallback for complex documents (use when stream surgery fails)
+  pdfx watermark <file.pdf> --text <text> [--opacity 0.3] [--angle 45] [--font-size 48] [--annot] [-o <out.pdf>]
+  pdfx watermark-rm <file.pdf> (--list [--json] | --strip <id> [-o <out.pdf>])
 
 Exit codes: 0 success, 1 operational error, 2 usage error.`
 
@@ -626,6 +629,8 @@ export async function runCli(
   if (verb === 'flatten') return runFlatten(rest, io)
   if (verb === 'stamp') return runStamp(rest, io)
   if (verb === 'redact') return runRedact(rest, io)
+  if (verb === 'watermark') return runWatermark(rest, io)
+  if (verb === 'watermark-rm') return runWatermarkRm(rest, io)
   io.err(`Unknown command "${verb}"`)
   io.err(USAGE)
   return EXIT_USAGE
