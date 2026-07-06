@@ -12,9 +12,7 @@ import {
   launchApp,
   queueOpenPaths,
   queueSavePath,
-  shot,
-  triggerCloseFullView,
-  triggerSaveAnnots
+  shot
 } from './helpers/launch'
 
 test('highlight annotation round-trip: draw → save → export → verify in PDF bytes', async () => {
@@ -30,24 +28,28 @@ test('highlight annotation round-trip: draw → save → export → verify in PD
     await page.locator('header.toolbar').getByRole('button', { name: 'Open', exact: true }).click()
     await expect.poll(async () => (await getState(page)).docs.length, { timeout: 60_000 }).toBe(1)
 
-    // ── 2. Activate Highlight tool BEFORE opening FullView ───────────────────
-    // The full-view overlay sits at z-index 30 above the toolbar (z-index 10),
-    // so the tool must be selected while the collection canvas is visible.
-    await page.locator('header.toolbar button[title="Highlight"]').click()
-    const stateAfterTool = await getState(page)
-    expect(stateAfterTool.annotTool).toBe('highlight')
-    await shot(page, '06-annots', '01-highlight-selected')
-
-    // ── 3. Open FullView by double-clicking the first page cell ──────────────
+    // ── 2. Open FullView by double-clicking the first page cell ──────────────
     const pageId = (await getState(page)).docs[0].pages[0].id
     const cell = page.locator(`[data-page-id="${pageId}"]`)
     await cell.dblclick()
     // FullView mounts on top of the collection canvas; wait for it.
     await expect(page.locator('.full-page').first()).toBeVisible({ timeout: 10_000 })
-    await shot(page, '06-annots', '02-fullview-open')
+    await shot(page, '06-annots', '01-fullview-open')
+
+    // ── 3. Activate Highlight tool from the full-view chrome ─────────────────
+    // The chrome header bar now contains the annot tool cluster, making the
+    // full annotation workflow reachable without leaving full-view mode.
+    // Previously the toolbar cluster (z-index 10) was occluded by the full-view
+    // overlay (z-index 30), making the workflow unreachable via real UI clicks.
+    const highlightBtn = page.locator('.full-chrome button[title="Highlight"]')
+    await expect(highlightBtn).toBeVisible({ timeout: 5_000 })
+    await highlightBtn.click()
+    const stateAfterTool = await getState(page)
+    expect(stateAfterTool.annotTool).toBe('highlight')
+    await shot(page, '06-annots', '02-highlight-selected-in-chrome')
 
     // ── 4. Wait for the .annot-layer overlay to appear ───────────────────────
-    // annotTool='highlight' is already active; AnnotOverlay renders when
+    // annotTool='highlight' is now active; AnnotOverlay renders when
     // tool !== 'none' inside FullViewPage.
     const annotLayer = page.locator('.full-page .annot-layer').first()
     await expect(annotLayer).toBeVisible({ timeout: 5_000 })
@@ -87,14 +89,16 @@ test('highlight annotation round-trip: draw → save → export → verify in PD
     // ── 6. Assert one draft annotation was committed ─────────────────────────
     await expect.poll(async () => (await getState(page)).annotDraftCount, { timeout: 5_000 }).toBe(1)
 
-    // ── 7. Save Annots via the test bridge action ────────────────────────────
-    // The toolbar Save Annots button (z-index 10) is occluded by the full-view
-    // overlay (z-index 30) and cannot receive Playwright clicks. The bridge
-    // action invokes handleSaveAnnots() directly — functionally identical but
-    // bypasses the unreachable DOM button. handleSaveAnnots() requires the
-    // full-view to be open (it reads fullViewState.fullView for the docId),
-    // so we must call it while still in full-view mode.
-    await triggerSaveAnnots(page)
+    // ── 7. Save Annots via the real full-view chrome button ──────────────────
+    // The Save Annots button lives in the full-view chrome header bar (z-index
+    // 30), so it is always reachable while full-view is open. handleSaveAnnots
+    // in App.tsx requires fullViewState.fullView to be set (to get the docId),
+    // so the save must happen while full-view is still open — which is exactly
+    // what the chrome placement guarantees.
+    const saveBtn = page.locator('.full-chrome button[title="Commit annotation drafts into PDF"]')
+    await expect(saveBtn).toBeVisible({ timeout: 5_000 })
+    await expect(saveBtn).toBeEnabled({ timeout: 5_000 })
+    await saveBtn.click()
 
     // ── 8. Assert toast and draft count cleared ──────────────────────────────
     await expect.poll(async () => (await getState(page)).toast, { timeout: 10_000 }).toBe(
@@ -103,11 +107,12 @@ test('highlight annotation round-trip: draw → save → export → verify in PD
     await expect.poll(async () => (await getState(page)).annotDraftCount, { timeout: 5_000 }).toBe(0)
     await shot(page, '06-annots', '04-saved-toast')
 
-    // ── 9. Close FullView, then export to PDF ───────────────────────────────
-    // Use the bridge action to call closeFullView() directly: the close button
-    // is under pointer-events: none on the chrome container, and Escape can be
-    // swallowed by Playwright's focus model when the full-view canvas has input.
-    await triggerCloseFullView(page)
+    // ── 9. Close FullView via the real chrome close button ───────────────────
+    // The close button is in the full-view chrome header bar at z-index 30,
+    // so it is reachable without bridge actions.
+    const closeBtn = page.locator('.full-chrome button[title="Close (Esc)"]')
+    await expect(closeBtn).toBeVisible({ timeout: 5_000 })
+    await closeBtn.click()
     await expect(page.locator('.full-view')).not.toBeVisible({ timeout: 5_000 })
 
     rmSync(exportPath, { force: true })
