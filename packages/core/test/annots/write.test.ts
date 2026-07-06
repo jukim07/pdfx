@@ -30,7 +30,17 @@ describe('writeAnnots reparse', () => {
     const out = await writeAnnots(await blankPdf(), annots)
     const dict = await firstAnnotDict(out)
     expect(dict.lookup(PDFName.of('Subtype'), PDFName).asString()).toBe('/Highlight')
-    expect(dict.lookup(PDFName.of('QuadPoints'), PDFArray).size()).toBe(8)
+    const quadPoints = dict.lookup(PDFName.of('QuadPoints'), PDFArray)
+    expect(quadPoints.size()).toBe(8)
+    // Verify QuadPoints coordinate order: UL, UR, LL, LR → x1,y1,x2,y2,x3,y3,x4,y4
+    expect((quadPoints.get(0) as PDFNumber).asNumber()).toBe(100) // x1
+    expect((quadPoints.get(1) as PDFNumber).asNumber()).toBe(712) // y1
+    expect((quadPoints.get(2) as PDFNumber).asNumber()).toBe(150) // x2
+    expect((quadPoints.get(3) as PDFNumber).asNumber()).toBe(712) // y2
+    expect((quadPoints.get(4) as PDFNumber).asNumber()).toBe(100) // x3
+    expect((quadPoints.get(5) as PDFNumber).asNumber()).toBe(700) // y3
+    expect((quadPoints.get(6) as PDFNumber).asNumber()).toBe(150) // x4
+    expect((quadPoints.get(7) as PDFNumber).asNumber()).toBe(700) // y4
     expect(dict.lookup(PDFName.of('Rect'), PDFArray).size()).toBe(4)
   })
 
