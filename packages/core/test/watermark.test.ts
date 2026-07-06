@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { PDFDocument, degrees, rgb } from 'pdf-lib'
 import { addWatermark, findWatermarkCandidates, stripWatermark } from '../src/ops/watermark.js'
 import { extractText } from '../src/extract/text.js'
+import { mkdtempSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 
 // PDF streams are FlateDecode-compressed; literal text does not appear in raw
 // bytes. Use extractText for content survival assertions instead.
@@ -294,6 +297,36 @@ describe('rebuildLegible', () => {
       }
     }
     expect(foundFontName).toBe(true)
+  })
+
+  it('throws contextual error when OpenDyslexic font is missing', async () => {
+    // Save original PDFX_FONT_DIR
+    const originalFontDir = process.env.PDFX_FONT_DIR
+
+    try {
+      // Point to empty temp directory
+      const emptyDir = mkdtempSync(join(tmpdir(), 'pdfx-test-'))
+      process.env.PDFX_FONT_DIR = emptyDir
+
+      // Create a simple PDF
+      const doc = await PDFDocument.create()
+      const page = doc.addPage([612, 792])
+      page.drawText('Test', { x: 72, y: 700, size: 12 })
+      const pdf = await doc.save()
+
+      // rebuildLegible should throw with contextual error
+      const { rebuildLegible } = await import('../src/ops/watermark.js')
+      await expect(rebuildLegible(pdf)).rejects.toThrow(
+        /OpenDyslexic font not found/
+      )
+    } finally {
+      // Restore original env var
+      if (originalFontDir !== undefined) {
+        process.env.PDFX_FONT_DIR = originalFontDir
+      } else {
+        delete process.env.PDFX_FONT_DIR
+      }
+    }
   })
 })
 

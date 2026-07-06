@@ -715,7 +715,13 @@ async function extractTextRuns(bytes: Uint8Array): Promise<TextRun[][]> {
 export async function rebuildLegible(bytes: Uint8Array, opts?: LegibleOpts): Promise<Uint8Array> {
   const { sizeDelta = 4, color = [0, 0, 0] } = opts ?? {}
 
-  const fontBytes = readFileSync(getOpenDyslexicPath())
+  const fontPath = getOpenDyslexicPath()
+  let fontBytes: Buffer
+  try {
+    fontBytes = readFileSync(fontPath)
+  } catch (err) {
+    throw new Error(`rebuildLegible: OpenDyslexic font not found at ${fontPath} — set PDFX_FONT_DIR or check resources/fonts/. Cause: ${(err as Error).message}`)
+  }
 
   // Extract text runs from source via pdfjs
   const allRuns = await extractTextRuns(bytes)
