@@ -39,7 +39,13 @@ describe('readAnnots round-trip', () => {
     const [page0] = await readAnnots(out)
     const a = page0.annots[0]
     expect(a.type).toBe('note')
-    if (a.type === 'note') expect(a.contents).toBe('hi there')
+    if (a.type === 'note') {
+      expect(a.contents).toBe('hi there')
+      // color round-trip
+      expect(a.color.r).toBeCloseTo(1)
+      expect(a.color.g).toBeCloseTo(1)
+      expect(a.color.b).toBeCloseTo(0)
+    }
   })
 
   it('re-reads all markup subtypes (underline, strikeout)', async () => {
@@ -80,6 +86,12 @@ describe('readAnnots round-trip', () => {
     expect(a.type).toBe('highlight')
     if (a.type === 'highlight') {
       expect(a.contents).toBe('annotated text')
+      // color round-trip
+      expect(a.color.r).toBeCloseTo(1)
+      expect(a.color.g).toBeCloseTo(1)
+      expect(a.color.b).toBeCloseTo(0)
+      // opacity round-trip (was silently dropped before fix)
+      expect(a.opacity).toBeCloseTo(0.5)
     }
   })
 
@@ -124,6 +136,8 @@ describe('readAnnots round-trip', () => {
       expect(a.paths).toHaveLength(2)
       expect(a.paths[0]).toHaveLength(6)
       expect(a.paths[0][0]).toBeCloseTo(10)
+      // borderWidth round-trip (was hardcoded to 1 before fix)
+      expect(a.borderWidth).toBe(2)
     }
   })
 

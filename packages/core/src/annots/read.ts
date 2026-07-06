@@ -60,11 +60,14 @@ function parseOne(dict: PDFDict, page: number): Annot | null {
         '/StrikeOut': 'strikeout',
       }
       const contents = readContents(dict)
+      const caNum = dict.lookupMaybe(PDFName.of('CA'), PDFNumber)
+      const opacity = caNum !== undefined ? caNum.asNumber() : undefined
       return {
         type: typeMap[st],
         page,
         quads: readQuads(dict),
         color,
+        ...(opacity !== undefined ? { opacity } : {}),
         ...(contents ? { contents } : {}),
       }
     }
@@ -93,7 +96,10 @@ function parseOne(dict: PDFDict, page: number): Annot | null {
           paths.push(flat)
         }
       }
-      return { type: 'ink', page, paths, color, borderWidth: 1 }
+      const bsDict = dict.lookupMaybe(PDFName.of('BS'), PDFDict)
+      const bwNum = bsDict?.lookupMaybe(PDFName.of('W'), PDFNumber)
+      const borderWidth = bwNum !== undefined ? bwNum.asNumber() : 1
+      return { type: 'ink', page, paths, color, borderWidth }
     }
     case '/Stamp': {
       // Appearance-stream PNG is not re-extracted on import; empty png marks an
