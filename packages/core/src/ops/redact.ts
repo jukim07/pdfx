@@ -101,9 +101,7 @@ export async function redactRegions(
   if (regions.length === 0) return bytes
 
   if (opts.mode === 'rasterize') {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error Task 7 module does not exist yet; fails at runtime only if rasterize mode requested
-    const { rasterizeRedact } = await import('./redact-rasterize.js') // Task 7
+    const { rasterizeRedact } = await import('./redact-rasterize.js')
     return rasterizeRedact(bytes, regions, opts)
   }
 
