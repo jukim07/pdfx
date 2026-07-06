@@ -128,6 +128,10 @@ async function runSurgery(
   }
   let angle = 0
   if (verb === 'rotate') {
+    if (flags.angle === undefined || flags.angle === '') {
+      io.err('pdfx rotate: --angle <deg> is required')
+      return EXIT_USAGE
+    }
     angle = Number(flags.angle)
     if (!Number.isInteger(angle) || angle % 90 !== 0) {
       io.err(`pdfx rotate: --angle must be a multiple of 90, got "${flags.angle}"`)

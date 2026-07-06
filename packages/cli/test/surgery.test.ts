@@ -66,6 +66,12 @@ describe('rotate / delete / pull / crop', () => {
     expect(await runCli(['rotate', pdf4, '--angle', '45', '-o', join(tmp, 'x.pdf')], io)).toBe(EXIT_USAGE)
   })
 
+  it('rotate with no --angle exits 2 and reports --angle in stderr', async () => {
+    const { io, err } = collectIo()
+    expect(await runCli(['rotate', pdf4, '-o', join(tmp, 'x.pdf')], io)).toBe(EXIT_USAGE)
+    expect(err.join('\n')).toContain('--angle')
+  })
+
   it('delete removes the range', async () => {
     const out = join(tmp, 'deleted.pdf')
     const { io } = collectIo()
