@@ -1,6 +1,6 @@
 # PDFX Format Specification
 
-**Version 1.0 — draft**
+**Version 1.1 — draft**
 
 PDFX is a backwards-compatible extension of PDF for bundling multiple documents
 into a single file. Every `.pdfx` file is a fully valid PDF; PDFX-aware viewers
@@ -44,6 +44,9 @@ The manifest is a UTF-8 encoded JSON object:
 }
 ```
 
+> **v1.1** adds optional `source` (provenance) and `tags[]` fields on each document entry.
+> v1.0 readers are unaffected: the validation rule checks only `name` and `pages`.
+
 | Field               | Type    | Required | Description                                       |
 | ------------------- | ------- | -------- | ------------------------------------------------- |
 | `pdfx`              | string  | yes      | Format version. Currently `"1.0"`.                |
@@ -51,6 +54,12 @@ The manifest is a UTF-8 encoded JSON object:
 | `documents`         | array   | yes      | Member documents, in page order.                  |
 | `documents[].name`  | string  | yes      | Display name of the document (no file extension). |
 | `documents[].pages` | integer | yes      | Number of pages belonging to this document (≥ 1). |
+| `documents[].source`            | object  | no       | Provenance of this document's original file (v1.1+). |
+| `documents[].source.filename`   | string  | yes (if source present) | Original filename as received at import. |
+| `documents[].source.sha256`     | string  | yes (if source present) | Hex SHA-256 of the original file bytes before any conversion. |
+| `documents[].source.importedAt` | string  | yes (if source present) | ISO 8601 UTC timestamp when the file was imported. |
+| `documents[].source.converted`  | boolean | no       | `true` when the file was converted from a non-PDF format (e.g. PNG→PDF). |
+| `documents[].tags`              | array   | no       | User-defined string labels for this document (v1.1+). |
 
 The page counts partition the PDF's page sequence: document _i_ owns the pages
 starting immediately after the pages of document _i − 1_.

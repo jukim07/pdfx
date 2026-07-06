@@ -11,14 +11,24 @@ import {
 } from 'pdf-lib'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 
-export { buildPdf, buildPdfx } from './build.js'
+export { buildPdf, buildPdfx, buildPdfxWithProvenance } from './build.js'
 
 export const MANIFEST_NAME = 'pdfx-manifest.json'
 export const PDFX_VERSION = '1.0'
+export const PDFX_VERSION_MINOR = '1.1'
+
+export interface PdfxManifestDocumentSource {
+  filename: string
+  sha256: string
+  importedAt: string   // ISO 8601
+  converted?: boolean  // true when a non-PDF was converted to PDF at intake
+}
 
 export interface PdfxManifestDocument {
   name: string
   pages: number
+  source?: PdfxManifestDocumentSource
+  tags?: string[]
 }
 
 export interface PdfxManifest {
@@ -51,10 +61,13 @@ export function stripExtension(filename: string): string {
   return filename.replace(/\.(pdf|pdfx)$/i, '')
 }
 
+const SUPPORTED_VERSIONS = new Set(['1.0', '1.1'])
+
 function validateManifest(manifest: PdfxManifest): PdfxManifest | null {
   const valid =
     manifest &&
     typeof manifest.pdfx === 'string' &&
+    SUPPORTED_VERSIONS.has(manifest.pdfx) &&
     Array.isArray(manifest.documents) &&
     manifest.documents.every(
       (d) => typeof d.name === 'string' && Number.isInteger(d.pages) && d.pages > 0

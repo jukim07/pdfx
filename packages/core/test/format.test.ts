@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { PDFDocument, PDFName } from 'pdf-lib'
-import { buildPdfx, parseManifest, partitionPages, stripExtension } from '../src/index.js'
+import {
+  buildPdfx,
+  buildPdfxWithProvenance,
+  parseManifest,
+  partitionPages,
+  stripExtension
+} from '../src/index.js'
+import type { ExportDocument, PdfxManifestDocumentSource } from '../src/index.js'
 
 async function onePagePdf(): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
@@ -76,6 +83,84 @@ describe('pdfx manifest round-trip', () => {
     const badManifest = { documents: [{ name: 'Doc', pages: 1 }] }
     await doc.attach(
       new TextEncoder().encode(JSON.stringify(badManifest)),
+      'pdfx-manifest.json',
+      { mimeType: 'application/json' }
+    )
+    const bytes = await doc.save()
+    await expect(parseManifest(bytes)).resolves.toBeNull()
+  })
+})
+
+describe('manifest v1.1', () => {
+  it('buildPdfxWithProvenance bumps version to 1.1 when source present', async () => {
+    const src = await onePagePdf()
+    const source: PdfxManifestDocumentSource = {
+      filename: 'invoice.pdf',
+      sha256: 'abc123def456',
+      importedAt: '2026-07-05T10:00:00.000Z'
+    }
+    const docs: ExportDocument[] = [
+      { name: 'Invoice', pages: [{ bytes: src, sourceKey: 'k1', pageIndex: 0 }] }
+    ]
+    const result = await buildPdfxWithProvenance(docs, 'Test', new Map([['Invoice', source]]))
+    const mf = await parseManifest(result)
+    expect(mf).not.toBeNull()
+    expect(mf!.pdfx).toBe('1.1')
+    expect(mf!.documents[0].source).toEqual(source)
+  })
+
+  it('buildPdfx (no provenance) still writes version 1.0', async () => {
+    const src = await onePagePdf()
+    const docs: ExportDocument[] = [
+      { name: 'X', pages: [{ bytes: src, sourceKey: 'k2', pageIndex: 0 }] }
+    ]
+    const result = await buildPdfx(docs, 'NoProvenance')
+    const mf = await parseManifest(result)
+    expect(mf!.pdfx).toBe('1.0')
+    expect((mf!.documents[0] as any).source).toBeUndefined()
+  })
+
+  it('parseManifest accepts v1.1 file with source and tags fields', async () => {
+    const doc = await PDFDocument.create()
+    doc.addPage([200, 200])
+    const manifest = {
+      pdfx: '1.1',
+      title: 'New',
+      documents: [{
+        name: 'Doc B',
+        pages: 1,
+        source: { filename: 'doc_b.pdf', sha256: 'deadbeef', importedAt: '2026-07-05T00:00:00.000Z' },
+        tags: ['contract']
+      }]
+    }
+    await doc.attach(
+      new TextEncoder().encode(JSON.stringify(manifest)),
+      'pdfx-manifest.json',
+      { mimeType: 'application/json' }
+    )
+    const bytes = await doc.save()
+    const result = await parseManifest(bytes)
+    expect(result!.pdfx).toBe('1.1')
+    expect(result!.documents[0].source!.sha256).toBe('deadbeef')
+    expect(result!.documents[0].tags).toEqual(['contract'])
+  })
+
+  it('buildPdfxWithProvenance without provenance map falls back to version 1.0', async () => {
+    const src = await onePagePdf()
+    const docs: ExportDocument[] = [
+      { name: 'Solo', pages: [{ bytes: src, sourceKey: 'sk', pageIndex: 0 }] }
+    ]
+    const result = await buildPdfxWithProvenance(docs, 'Solo')
+    const mf = await parseManifest(result)
+    expect(mf!.pdfx).toBe('1.0')
+  })
+
+  it('parseManifest rejects unknown version (e.g. 2.0)', async () => {
+    const doc = await PDFDocument.create()
+    doc.addPage([200, 200])
+    const manifest = { pdfx: '2.0', documents: [{ name: 'A', pages: 1 }] }
+    await doc.attach(
+      new TextEncoder().encode(JSON.stringify(manifest)),
       'pdfx-manifest.json',
       { mimeType: 'application/json' }
     )
