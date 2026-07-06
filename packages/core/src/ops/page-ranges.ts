@@ -9,7 +9,8 @@
  *   "3-5,9"  → pages 3,4,5,9
  *
  * Out-of-bounds pages are silently clamped/dropped.
- * Throws on malformed tokens (non-integer, empty spec).
+ * Throws on malformed tokens (non-integer, empty spec, reversed range).
+ * A reversed range (start > end) is a spec error, not an out-of-bounds page.
  */
 export function parsePageRanges(spec: string, pageCount: number): number[] {
   if (!spec.trim()) throw new Error('parsePageRanges: spec must not be empty')
@@ -33,6 +34,7 @@ export function parsePageRanges(spec: string, pageCount: number): number[] {
       const start = parseIntStrict(t.slice(0, dashIdx), spec)
       const endStr = t.slice(dashIdx + 1)
       const end = endStr === '' ? pageCount : parseIntStrict(endStr, spec)
+      if (start > end) throw new Error(`parsePageRanges: reversed range "${t}" (start > end) in spec "${spec}"`)
       for (let p = start; p <= Math.min(end, pageCount); p++) push(p)
     } else {
       push(parseIntStrict(t, spec))

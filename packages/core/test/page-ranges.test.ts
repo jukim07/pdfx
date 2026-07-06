@@ -42,4 +42,17 @@ describe('parsePageRanges', () => {
   it('page 1 in 1-page doc', () => {
     expect(parsePageRanges('1', 1)).toEqual([0])
   })
+
+  // Item 1: reversed-range spec decision — start > end is malformed, not silently empty
+  it('throws on reversed range "5-3"', () => {
+    expect(() => parsePageRanges('5-3', 10)).toThrow(/reversed range/)
+  })
+
+  it('single-page range "3-3" still works', () => {
+    expect(parsePageRanges('3-3', 10)).toEqual([2])
+  })
+
+  it('normal range "3-5" unchanged', () => {
+    expect(parsePageRanges('3-5', 10)).toEqual([2, 3, 4])
+  })
 })
