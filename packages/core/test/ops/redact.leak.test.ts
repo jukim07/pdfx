@@ -68,6 +68,7 @@ describe('redaction leak post-condition (governing test — do not weaken)', () 
     const out = await redactText(await buildSsnFixture(), SSN, { mode: 'black' })
     const text = pdftotextOf(out)
     expect(text).not.toContain(SSN)
+    expect(text).not.toContain('123-45') // no partial survivor
     expect(text).toContain('Employee record')
   })
 })
