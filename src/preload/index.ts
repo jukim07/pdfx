@@ -11,7 +11,7 @@ export interface OpenedFile {
 
 export type ZoomAction = 'in' | 'out' | 'reset'
 
-export type MenuAction = 'open' | 'export-pdfx' | 'export-pdf' | 'export-zip'
+export type MenuAction = 'open' | 'export-pdfx' | 'export-pdf' | 'export-zip' | 'export-legible' | 'watermark-panel'
 
 export interface SaveFilter {
   name: string
@@ -82,7 +82,13 @@ const api = {
       callback(action)
     ipcRenderer.on('pdfx:menu', listener)
     return () => ipcRenderer.removeListener('pdfx:menu', listener)
-  }
+  },
+  findWatermarkCandidates: (bytes: Uint8Array): Promise<import('@pdfx/core').Candidate[]> =>
+    ipcRenderer.invoke('pdfx:watermark-op', 'find', bytes),
+  stripWatermark: (bytes: Uint8Array, candidateId: string): Promise<Uint8Array> =>
+    ipcRenderer.invoke('pdfx:watermark-op', 'strip', bytes, candidateId),
+  rebuildLegible: (bytes: Uint8Array): Promise<Uint8Array> =>
+    ipcRenderer.invoke('pdfx:watermark-op', 'legible', bytes)
 }
 
 export type PdfxApi = typeof api

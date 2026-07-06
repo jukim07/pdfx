@@ -26,6 +26,17 @@ export function buildMenu(): void {
         { id: 'export-pdf', label: 'Export Single PDF…', click: sendMenu('export-pdf') },
         { id: 'export-zip', label: 'Export All as ZIP…', click: sendMenu('export-zip') },
         { type: 'separator' },
+        {
+          id: 'watermark-panel',
+          label: 'Watermark…',
+          click: sendMenu('watermark-panel')
+        },
+        {
+          id: 'export-legible',
+          label: 'Export legible copy…',
+          click: sendMenu('export-legible')
+        },
+        { type: 'separator' },
         process.platform === 'darwin' ? { role: 'close' as const } : { role: 'quit' as const }
       ]
     },

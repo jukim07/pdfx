@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useWatermark } from './app/useWatermark'
+import { WatermarkPanel } from './components/WatermarkPanel'
 import { computeLayout } from './canvas/layout'
 import { Toolbar } from './components/Toolbar'
 import { FullView } from './components/FullView'
@@ -284,6 +286,26 @@ export default function App(): React.JSX.Element {
     onExternalDrop: handleExternalDropFiles
   })
 
+  // The active document bytes needed for watermark ops.
+  // docs is from collection.docs (confirmed App.tsx:46). Each doc.pages[n].source.bytes
+  // is the raw Uint8Array for that source (confirmed App.tsx:124 `source.bytes`).
+  const getActiveDocBytes = useCallback((): Uint8Array | null => {
+    const firstDoc = docs[0]
+    if (!firstDoc || !firstDoc.pages[0]) return null
+    return firstDoc.pages[0].source.bytes
+  }, [docs])
+
+  const handleBytesUpdated = useCallback(
+    (_bytes: Uint8Array) => {
+      // In Phase ①+, this should replace the source bytes and re-render pages.
+      // For now, flash a message so the user knows to re-import.
+      flash('Watermark removed — re-import the file to see changes')
+    },
+    [flash]
+  )
+
+  const watermark = useWatermark(getActiveDocBytes, handleBytesUpdated)
+
   const onPaste = useCallback(() => void handlePaste(), [handlePaste])
   useKeyboardShortcuts({
     active: !fullViewState.fullView,
@@ -345,13 +367,31 @@ export default function App(): React.JSX.Element {
   }, [fullViewRef])
 
   useEffect(() => {
-    return window.api.onMenu((action) => {
+    return window.api.onMenu(async (action) => {
       if (action === 'open') void openViaDialog()
       else if (action === 'export-pdfx') void exportCollection('pdfx')
       else if (action === 'export-pdf') void exportCollection('pdf')
       else if (action === 'export-zip') void exportZip()
+      else if (action === 'watermark-panel') void watermark.scan()
+      else if (action === 'export-legible') {
+        const bytes = getActiveDocBytes()
+        if (!bytes) { flash('No document open'); return }
+        const path = await window.api.chooseSavePath('legible-copy.pdf', { name: 'PDF', extensions: ['pdf'] })
+        if (!path) return
+        setBusy(true)
+        try {
+          const result = await window.api.rebuildLegible(bytes)
+          const saved = await window.api.writeFile(path, result)
+          flash(`Saved ${saved}`)
+        } catch (e) {
+          console.error('rebuildLegible failed', e)
+          flash('Export failed')
+        } finally {
+          setBusy(false)
+        }
+      }
     })
-  }, [openViaDialog, exportCollection, exportZip])
+  }, [openViaDialog, exportCollection, exportZip, watermark.scan, getActiveDocBytes, flash, setBusy])
 
   const totalPages = docs.reduce((sum, d) => sum + d.pages.length, 0)
   const { fullView } = fullViewState
@@ -483,6 +523,16 @@ export default function App(): React.JSX.Element {
         )}
 
         {toast && <div className="toast">{toast}</div>}
+
+        <WatermarkPanel
+          step={watermark.step}
+          candidates={watermark.candidates}
+          selected={watermark.selected}
+          onSelect={watermark.setSelected}
+          onStrip={watermark.strip}
+          onDismiss={watermark.dismiss}
+          error={watermark.error}
+        />
       </div>
     </FindProvider>
   )

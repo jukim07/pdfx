@@ -190,4 +190,15 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
       }
     }
   )
+
+  ipcMain.handle(
+    'pdfx:watermark-op',
+    async (_event, op: string, bytes: Uint8Array, ...args: string[]) => {
+      const { findWatermarkCandidates, stripWatermark, rebuildLegible } = await import('@pdfx/core')
+      if (op === 'find') return findWatermarkCandidates(bytes)
+      if (op === 'strip') return stripWatermark(bytes, args[0])
+      if (op === 'legible') return rebuildLegible(bytes)
+      throw new Error(`unknown watermark op: ${op}`)
+    }
+  )
 }
