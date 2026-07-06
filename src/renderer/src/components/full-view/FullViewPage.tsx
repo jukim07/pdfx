@@ -1,6 +1,6 @@
 import type { Annot, RedactRegion } from '@pdfx/core'
 import type { PageEntry } from '../../types'
-import type { AnnotTool } from '../../annots/useAnnotTool'
+import type { AnnotTool, DraftRedactRegion } from '../../annots/useAnnotTool'
 import { PageView } from '../PageView'
 import { useFindState } from '../../search/FindContext'
 import type { View } from './geometry'
@@ -22,8 +22,8 @@ interface FullViewPageProps {
   annotTool?: AnnotTool
   onAnnotCommit?: (a: Annot, sourceId: string) => void
   stampPng?: Uint8Array
-  redactDrafts?: RedactRegion[]
-  onRedactDraft?: (r: RedactRegion) => void
+  redactDrafts?: DraftRedactRegion[]
+  onRedactDraft?: (r: RedactRegion, sourceId: string) => void
 }
 
 export function FullViewPage(props: FullViewPageProps): React.JSX.Element {

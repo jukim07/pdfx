@@ -11,8 +11,8 @@ interface AnnotOverlayProps {
   onCommit: (a: Annot, sourceId: string) => void
   /** PNG bytes for the stamp tool; required when tool === 'stamp'. */
   stampPng?: Uint8Array
-  /** Called when a redact region is drawn; parent accumulates these as drafts. */
-  onRedactDraft?: (r: RedactRegion) => void
+  /** Called when a redact region is drawn; receives the region and the owning sourceId. */
+  onRedactDraft?: (r: RedactRegion, sourceId: string) => void
 }
 
 type DragState = { startX: number; startY: number; curX: number; curY: number }
@@ -83,7 +83,7 @@ export function AnnotOverlay({ page, tool, onCommit, stampPng, onRedactDraft }: 
 
     const sourceId = page.source.id
     if (tool === 'redact') {
-      onRedactDraft?.({ page: page.pageIndex, rect: pdfRect })
+      onRedactDraft?.({ page: page.pageIndex, rect: pdfRect }, sourceId)
       return
     }
     if (tool === 'stamp' && stampPng) {

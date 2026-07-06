@@ -1,6 +1,6 @@
 import type { Annot, RedactRegion } from '@pdfx/core'
 import type { DocEntry } from '../types'
-import type { AnnotTool } from '../annots/useAnnotTool'
+import type { AnnotTool, DraftRedactRegion } from '../annots/useAnnotTool'
 import type { Rect } from './full-view/geometry'
 import { useFullViewState } from './full-view/use-full-view-state'
 import { useFullViewControls } from './full-view/use-full-view-controls'
@@ -25,8 +25,8 @@ interface FullViewProps {
   busy?: boolean
   stampPng?: Uint8Array
   onOpenSignaturePicker?: () => void
-  redactDrafts?: RedactRegion[]
-  onRedactDraft?: (r: RedactRegion) => void
+  redactDrafts?: DraftRedactRegion[]
+  onRedactDraft?: (r: RedactRegion, sourceId: string) => void
   onApplyRedact?: () => void
   onCancelRedact?: () => void
 }

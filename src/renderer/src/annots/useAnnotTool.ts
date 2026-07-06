@@ -15,21 +15,30 @@ export interface DraftAnnot {
   sourceId: string
 }
 
+/** Renderer-local draft record: pairs a redact region with the source PDF it belongs to.
+ * Captured at draw time (AnnotOverlay knows the page's source), so apply can group by
+ * sourceId directly rather than re-resolving via pageIndex (which collides in merged docs). */
+export interface DraftRedactRegion {
+  region: RedactRegion
+  sourceId: string
+}
+
 export interface UseAnnotToolResult {
   tool: AnnotTool
   setTool: (t: AnnotTool) => void
   drafts: DraftAnnot[]
   addDraft: (a: Annot, sourceId: string) => void
   clearDraftsForSources: (sourceIds: Set<string>) => void
-  redactDrafts: RedactRegion[]
-  addRedactDraft: (r: RedactRegion) => void
+  redactDrafts: DraftRedactRegion[]
+  addRedactDraft: (r: RedactRegion, sourceId: string) => void
   clearRedactDrafts: () => void
+  clearRedactDraftsForSources: (sourceIds: Set<string>) => void
 }
 
 export function useAnnotTool(): UseAnnotToolResult {
   const [tool, setTool] = useState<AnnotTool>('none')
   const [drafts, setDrafts] = useState<DraftAnnot[]>([])
-  const [redactDrafts, setRedactDrafts] = useState<RedactRegion[]>([])
+  const [redactDrafts, setRedactDrafts] = useState<DraftRedactRegion[]>([])
 
   const addDraft = useCallback(
     (a: Annot, sourceId: string) => setDrafts((prev) => [...prev, { annot: a, sourceId }]),
@@ -43,8 +52,28 @@ export function useAnnotTool(): UseAnnotToolResult {
     []
   )
 
-  const addRedactDraft = useCallback((r: RedactRegion) => setRedactDrafts((d) => [...d, r]), [])
+  const addRedactDraft = useCallback(
+    (r: RedactRegion, sourceId: string) =>
+      setRedactDrafts((prev) => [...prev, { region: r, sourceId }]),
+    []
+  )
   const clearRedactDrafts = useCallback(() => setRedactDrafts([]), [])
+  // Clear only the drafts whose source was successfully redacted; leave others intact.
+  const clearRedactDraftsForSources = useCallback(
+    (sourceIds: Set<string>) =>
+      setRedactDrafts((prev) => prev.filter((d) => !sourceIds.has(d.sourceId))),
+    []
+  )
 
-  return { tool, setTool, drafts, addDraft, clearDraftsForSources, redactDrafts, addRedactDraft, clearRedactDrafts }
+  return {
+    tool,
+    setTool,
+    drafts,
+    addDraft,
+    clearDraftsForSources,
+    redactDrafts,
+    addRedactDraft,
+    clearRedactDrafts,
+    clearRedactDraftsForSources
+  }
 }

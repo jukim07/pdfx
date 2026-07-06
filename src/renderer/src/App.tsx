@@ -20,7 +20,8 @@ import { CropRangeDialog } from './components/CropRangeDialog'
 import type { CropRect } from './components/CropOverlay'
 import { useAnnotTool } from './annots/useAnnotTool'
 import { groupDraftsBySource } from './annots/groupDrafts'
-import type { Annot, StampAnnot, RedactRegion, RedactMode } from '@pdfx/core'
+import { groupRedactDraftsBySource } from './annots/groupRedactDrafts'
+import type { Annot, StampAnnot, RedactMode } from '@pdfx/core'
 import { loadSource } from './pdfx/source'
 import { SignaturePicker } from './annots/SignaturePicker'
 
@@ -168,6 +169,8 @@ export default function App(): React.JSX.Element {
   // Permanently redact accumulated draft regions, then reload the affected source.
   // Two-shot: first try 'black' (content-stream surgery); if StreamSurgeryError,
   // prompt to fall back to 'rasterize' (page becomes an image, no selectable text).
+  // Each source's drafts are cleared immediately after that source succeeds, so a
+  // mid-flow decline on the rasterize prompt leaves only unapplied sources' drafts.
   const handleApplyRedact = useCallback(async () => {
     if (annot.redactDrafts.length === 0 || !fullViewState.fullView) return
     const ok = window.confirm(
@@ -181,17 +184,11 @@ export default function App(): React.JSX.Element {
     const doc = collection.docsRef.current.find((d) => d.id === docId)
     if (!doc || doc.pages.length === 0) return
 
-    // Group regions by source (same pattern as handleSaveAnnots).
-    const bySource = new Map<string, { source: (typeof doc.pages)[number]['source']; regions: RedactRegion[] }>()
-    for (const region of annot.redactDrafts) {
-      const page = doc.pages.find((p) => p.pageIndex === region.page)
-      if (!page) continue
-      const srcId = page.source.id
-      if (!bySource.has(srcId)) bySource.set(srcId, { source: page.source, regions: [] })
-      bySource.get(srcId)!.regions.push(region)
-    }
+    // Group by sourceId captured at draw time; avoids pageIndex collision in merged docs.
+    const sourceById = new Map(doc.pages.map((p) => [p.source.id, p.source]))
+    const bySource = groupRedactDraftsBySource(annot.redactDrafts, sourceById)
 
-    const applyBytes = async (srcId: string, source: { bytes: Uint8Array; id: string }, regions: RedactRegion[], mode: RedactMode) => {
+    const applyBytes = async (srcId: string, source: { bytes: Uint8Array; id: string }, regions: Parameters<typeof window.api.redactDoc>[1], mode: RedactMode) => {
       const result = await window.api.redactDoc(source.bytes, regions, mode)
       if ('surgeryFailed' in result) {
         return result as { surgeryFailed: true; page: number }
@@ -244,11 +241,13 @@ export default function App(): React.JSX.Element {
         flash('Redaction failed')
         return
       }
+      // Clear this source's drafts immediately after it succeeds so a later
+      // decline on a different source's rasterize prompt can't double-apply these.
+      annot.clearRedactDraftsForSources(new Set([srcId]))
     }
-    annot.clearRedactDrafts()
     setBusy(false)
     flash('Redacted')
-  }, [annot.redactDrafts, annot.clearRedactDrafts, fullViewState.fullView, collection.docsRef, collection.setDocs, setBusy, flash])
+  }, [annot.redactDrafts, annot.clearRedactDraftsForSources, fullViewState.fullView, collection.docsRef, collection.setDocs, setBusy, flash])
 
   const handleCancelRedact = useCallback(() => {
     annot.clearRedactDrafts()

@@ -1,5 +1,4 @@
-import type { AnnotTool } from '../../annots/useAnnotTool'
-import type { RedactRegion } from '@pdfx/core'
+import type { AnnotTool, DraftRedactRegion } from '../../annots/useAnnotTool'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '../icons'
 import { isMac } from './geometry'
 
@@ -17,7 +16,7 @@ interface FullViewChromeProps {
   busy?: boolean
   /** Opens the signature picker modal so the user can choose/draw a signature. */
   onOpenSignaturePicker?: () => void
-  redactDrafts?: RedactRegion[]
+  redactDrafts?: DraftRedactRegion[]
   onApplyRedact?: () => void
   onCancelRedact?: () => void
 }
