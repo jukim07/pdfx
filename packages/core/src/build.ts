@@ -70,10 +70,12 @@ export async function buildPdfxWithProvenance(
   provenance?: Map<string, PdfxManifestDocumentSource>
 ): Promise<Uint8Array> {
   const output = await PDFDocument.create()
-  const hasProvenance = Boolean(provenance && provenance.size > 0)
-  const version = hasProvenance ? PDFX_VERSION_MINOR : PDFX_VERSION
-  const manifest: PdfxManifest = { pdfx: version, title, documents: [] }
+  // Version is decided after building entries — bump to 1.1 only when at
+  // least one document entry actually receives a source field. A non-empty
+  // map whose keys match no document name must still produce a 1.0 manifest.
+  const manifest: PdfxManifest = { pdfx: PDFX_VERSION, title, documents: [] }
   const sources = new Map<string, PDFDocument>()
+  let anySourceAttached = false
 
   for (const doc of documents) {
     if (doc.pages.length === 0) continue
@@ -88,9 +90,15 @@ export async function buildPdfxWithProvenance(
     }
     const entry: PdfxManifestDocument = { name: doc.name, pages: doc.pages.length }
     const src = provenance?.get(doc.name)
-    if (src) entry.source = src
+    if (src) {
+      entry.source = src
+      anySourceAttached = true
+    }
     manifest.documents.push(entry)
   }
+
+  const version = anySourceAttached ? PDFX_VERSION_MINOR : PDFX_VERSION
+  manifest.pdfx = version
 
   await output.attach(new TextEncoder().encode(JSON.stringify(manifest, null, 2)), MANIFEST_NAME, {
     mimeType: 'application/json',

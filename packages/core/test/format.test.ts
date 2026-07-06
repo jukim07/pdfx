@@ -167,4 +167,34 @@ describe('manifest v1.1', () => {
     const bytes = await doc.save()
     await expect(parseManifest(bytes)).resolves.toBeNull()
   })
+
+  it('buildPdfxWithProvenance with empty Map produces 1.0 manifest with no source fields', async () => {
+    const src = await onePagePdf()
+    const docs: ExportDocument[] = [
+      { name: 'Invoice', pages: [{ bytes: src, sourceKey: 'k1', pageIndex: 0 }] }
+    ]
+    const result = await buildPdfxWithProvenance(docs, 'T', new Map())
+    const mf = await parseManifest(result)
+    expect(mf).not.toBeNull()
+    expect(mf!.pdfx).toBe('1.0')
+    expect((mf!.documents[0] as any).source).toBeUndefined()
+  })
+
+  it('buildPdfxWithProvenance with name-mismatch map produces 1.0 manifest and no source', async () => {
+    const src = await onePagePdf()
+    const source: PdfxManifestDocumentSource = {
+      filename: 'wrong.pdf',
+      sha256: 'deadbeef',
+      importedAt: '2026-07-06T00:00:00.000Z'
+    }
+    const docs: ExportDocument[] = [
+      { name: 'Invoice', pages: [{ bytes: src, sourceKey: 'k1', pageIndex: 0 }] }
+    ]
+    // Provenance map key 'WrongName' does not match document name 'Invoice'
+    const result = await buildPdfxWithProvenance(docs, 'T', new Map([['WrongName', source]]))
+    const mf = await parseManifest(result)
+    expect(mf).not.toBeNull()
+    expect(mf!.pdfx).toBe('1.0')
+    expect((mf!.documents[0] as any).source).toBeUndefined()
+  })
 })
