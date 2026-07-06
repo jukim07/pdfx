@@ -13,6 +13,8 @@ interface CropOverlayProps {
   onCancel: () => void
 }
 
+type DragState = { startX: number; startY: number; curX: number; curY: number }
+
 /**
  * Full-page overlay for rubber-band crop selection.
  * The user clicks and drags to select a crop area.
@@ -21,7 +23,6 @@ interface CropOverlayProps {
  */
 export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
-  type DragState = { startX: number; startY: number; curX: number; curY: number }
   // dragRef mirrors drag state synchronously so onMouseUp always reads the
   // live value even when the handler fires before React flushes the setDrag
   // update from onMouseDown (confirmed stale-closure bug: fast drag drops crop).
@@ -53,6 +54,10 @@ export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): Rea
       const fx = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
       const fy = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
       const next = { ...d, curX: fx, curY: fy }
+      // React may defer running this updater, so the ref write is not synchronous
+      // at event time; that is safe because onMouseUp takes its end corner from the
+      // live mouseup event coordinates and its start corner from onMouseDown's
+      // synchronous ref write — the crop rect is correct even if this write hasn't flushed yet.
       dragRef.current = next
       return next
     })

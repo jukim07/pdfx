@@ -33,7 +33,8 @@ test('footer crop applied to all pages persists as CropBox in the export', async
     // Drag from the top-left to ~92% height: keeps body text (y >= 174pt),
     // excludes the footer (text at y=30pt, glyph top ~40pt).
     // Events fire synchronously in a single evaluate call (no delay between
-    // mousedown and mouseup). CropOverlay.onMouseUp reads live state via
+    // mousedown and mouseup); this exact sequence previously required a 20ms delay to work around
+    // the CropOverlay stale closure. CropOverlay.onMouseUp reads live state via
     // dragRef rather than a stale closure, so fast drags are not dropped.
     const bb = (await overlay.boundingBox())!
     const x0 = bb.x + 1
