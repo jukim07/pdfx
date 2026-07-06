@@ -2,6 +2,8 @@ export interface IncomingFile {
   name: string
   data: Uint8Array
   path?: string
+  sha256?: string
+  importedAt?: string
 }
 
 export interface PageRef {

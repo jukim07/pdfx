@@ -70,7 +70,19 @@ function DocHeaderImpl({
       ) : (
         <span
           className="doc-name"
-          title={doc.name}
+          title={
+            doc.source
+              ? [
+                  doc.name,
+                  `File: ${doc.source.filename}`,
+                  `SHA-256: ${doc.source.sha256}`,
+                  `Imported: ${doc.source.importedAt}`,
+                  doc.source.converted ? 'Converted from original format' : ''
+                ]
+                  .filter(Boolean)
+                  .join('\n')
+              : doc.name
+          }
           onClick={(e) => {
             e.stopPropagation()
             setEditing(true)

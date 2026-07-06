@@ -1,11 +1,14 @@
 import { basename, join } from 'path'
 import { existsSync } from 'fs'
 import { readFile, readdir, stat } from 'fs/promises'
+import { createHash } from 'crypto'
 
 export interface OpenedFile {
   name: string
   data: Uint8Array
   path?: string
+  sha256?: string  // hex SHA-256 of original bytes before any conversion
+  importedAt?: string  // ISO 8601 UTC timestamp of when the file was read
 }
 
 export const IMPORTABLE = /\.(pdf|pdfx|png|jpe?g|webp|gif|bmp|avif|txt|rtf|svg|html?)$/i
@@ -16,11 +19,16 @@ export function collectFileArgs(argv: string[]): string[] {
 
 export async function readFiles(paths: string[]): Promise<OpenedFile[]> {
   return Promise.all(
-    paths.map(async (p) => ({
-      name: basename(p),
-      data: new Uint8Array(await readFile(p)),
-      path: p
-    }))
+    paths.map(async (p) => {
+      const data = new Uint8Array(await readFile(p))
+      return {
+        name: basename(p),
+        data,
+        path: p,
+        sha256: createHash('sha256').update(data).digest('hex'),
+        importedAt: new Date().toISOString()
+      }
+    })
   )
 }
 

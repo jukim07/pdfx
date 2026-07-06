@@ -1,5 +1,6 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { Box } from './ops/crop.js'
+import type { PdfxManifestDocumentSource } from './format.js'
 
 export interface PdfSource {
   id: string
@@ -26,4 +27,7 @@ export interface DocEntry {
   id: string
   name: string
   pages: PageEntry[]
+  // All partitions of a multi-doc .pdfx share the same source object —
+  // they all came from the same imported file.
+  source?: PdfxManifestDocumentSource
 }

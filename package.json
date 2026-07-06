@@ -17,6 +17,7 @@
     "typecheck": "yarn typecheck:node && yarn typecheck:web",
     "build:native": "node scripts/build-native.mjs",
     "build:packages": "yarn workspace @pdfx/core build && yarn workspace @pdfx/cli build",
+    "test": "vitest run",
     "test:packages": "yarn workspace @pdfx/core test && yarn workspace @pdfx/cli test",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "start": "electron-vite preview",

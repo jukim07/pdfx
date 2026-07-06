@@ -1,6 +1,6 @@
 import { getDocument } from 'pdfjs-dist'
 import { cropPages, findConverter, partitionPages, pullPages, readManifest, rotatePages, stripExtension } from '@pdfx/core'
-import type { ExportPage } from '@pdfx/core'
+import type { ExportPage, PdfxManifestDocumentSource } from '@pdfx/core'
 import type { DocEntry, PageEntry, PdfSource } from '../types'
 
 interface PageSize {
@@ -47,13 +47,20 @@ export function pagesFromSource(
   }))
 }
 
-export async function importIntoDocs(filename: string, bytes: Uint8Array): Promise<DocEntry[]> {
+export async function importIntoDocs(
+  filename: string,
+  bytes: Uint8Array,
+  provenance?: PdfxManifestDocumentSource
+): Promise<DocEntry[]> {
   const { source, sizes } = await loadSource(bytes)
   const manifest = await readManifest(source.pdf)
+  // All partition entries of a multi-doc .pdfx get the same source object —
+  // they all came from the same imported file.
   return partitionPages(manifest, source.pdf.numPages, stripExtension(filename)).map((part) => ({
     id: crypto.randomUUID(),
     name: part.name,
-    pages: pagesFromSource(source, sizes, part.indices)
+    pages: pagesFromSource(source, sizes, part.indices),
+    source: provenance
   }))
 }
 

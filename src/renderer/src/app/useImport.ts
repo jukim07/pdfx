@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { findConverter } from '@pdfx/core'
+import type { PdfxManifestDocumentSource } from '@pdfx/core'
 import { importIntoDocs, loadIncomingPages } from '../pdfx/source'
 import { dedupeNames } from './names'
 import { applyExternalDrop } from './external-drop'
@@ -26,7 +27,16 @@ export function useImport(
           const data = conv
             ? await conv.toPdf(file.name, file.data, undefined, file.path)
             : file.data
-          const entries = await importIntoDocs(name, data)
+          const provenance: PdfxManifestDocumentSource | undefined =
+            file.sha256 && file.importedAt
+              ? {
+                  filename: file.name,
+                  sha256: file.sha256,
+                  importedAt: file.importedAt,
+                  converted: conv !== undefined
+                }
+              : undefined
+          const entries = await importIntoDocs(name, data, provenance)
           setDocs((prev) => [...prev, ...dedupeNames(prev, entries)])
         } catch (error) {
           console.error(`Failed to import ${file.name}`, error)

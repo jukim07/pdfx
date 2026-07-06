@@ -4,6 +4,8 @@ export interface OpenedFile {
   name: string
   data: Uint8Array
   path?: string
+  sha256?: string
+  importedAt?: string
 }
 
 export type ZoomAction = 'in' | 'out' | 'reset'
