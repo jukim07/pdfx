@@ -33,15 +33,21 @@ export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): Rea
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
+    containerRef.current?.focus()
     const { fx, fy } = toFrac(e.clientX, e.clientY)
     setDrag({ startX: fx, startY: fy, curX: fx, curY: fy })
   }, [])
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!drag) return
-    const { fx, fy } = toFrac(e.clientX, e.clientY)
-    setDrag((d) => d ? { ...d, curX: fx, curY: fy } : null)
-  }, [drag])
+    const { clientX, clientY } = e
+    setDrag((d) => {
+      if (!d) return null
+      const rect = containerRef.current!.getBoundingClientRect()
+      const fx = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      const fy = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
+      return { ...d, curX: fx, curY: fy }
+    })
+  }, [])
 
   const onMouseUp = useCallback((e: React.MouseEvent) => {
     if (!drag) return
@@ -69,10 +75,12 @@ export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): Rea
   return (
     <div
       ref={containerRef}
+      tabIndex={-1}
       style={{
         position: 'absolute', inset: 0,
         cursor: 'crosshair',
-        zIndex: 20
+        zIndex: 20,
+        outline: 'none'
       }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
@@ -80,6 +88,7 @@ export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): Rea
       onMouseLeave={() => setDrag(null)}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => { e.stopPropagation(); onCancel() }}
+      onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
     >
       {drag && <div style={selectionStyle} />}
       <div style={{ position: 'absolute', top: 4, left: 0, right: 0, textAlign: 'center',
