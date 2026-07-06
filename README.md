@@ -51,6 +51,33 @@ yarn build:linux  # package for Linux
 
 *Linux packaging notes (formats, Flatpak, prerequisites) live in [docs/LINUX_SETUP.md](docs/LINUX_SETUP.md).*
 
+## MCP Server (Claude Code integration)
+
+`packages/mcp` provides a stdio MCP server exposing nine `pdfx_*` tools that
+import `@pdfx/core` directly (no shell-out). Register it in `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "pdfx": {
+      "command": "node",
+      "args": ["<absolute-path-to-repo>/packages/mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+Replace `<absolute-path-to-repo>` with the local checkout path, then build first:
+
+```bash
+yarn workspace @pdfx/mcp build
+```
+
+Available tools: `pdfx_info`, `pdfx_extract`, `pdfx_split`, `pdfx_merge`,
+`pdfx_pull`, `pdfx_delete`, `pdfx_rotate`, `pdfx_crop`, `pdfx_assets`.
+
+(`pdfx_stamp` / `pdfx_flatten` / `pdfx_redact` arrive in Phase IV.)
+
 ## License
 
 MIT
