@@ -76,7 +76,7 @@ yarn workspace @pdfx/mcp build
 Available tools: `pdfx_info`, `pdfx_extract`, `pdfx_split`, `pdfx_merge`,
 `pdfx_pull`, `pdfx_delete`, `pdfx_rotate`, `pdfx_crop`, `pdfx_assets`.
 
-(`pdfx_stamp` / `pdfx_flatten` / `pdfx_redact` arrive in Phase IV.)
+(`pdfx_stamp` / `pdfx_redact` arrive in a later phase; the CLI `flatten` verb is available but `pdfx_flatten` is not yet exposed as an MCP tool.)
 
 ## License
 
