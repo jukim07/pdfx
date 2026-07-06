@@ -49,7 +49,7 @@ The manifest is a UTF-8 encoded JSON object:
 
 | Field               | Type    | Required | Description                                       |
 | ------------------- | ------- | -------- | ------------------------------------------------- |
-| `pdfx`              | string  | yes      | Format version. Currently `"1.0"`.                |
+| `pdfx`              | string  | yes      | Format version. `"1.0"` or `"1.1"`.               |
 | `title`             | string  | no       | Human-readable title of the collection.           |
 | `documents`         | array   | yes      | Member documents, in page order.                  |
 | `documents[].name`  | string  | yes      | Display name of the document (no file extension). |
