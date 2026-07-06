@@ -1,6 +1,10 @@
 import {
   PDFDocument,
   PDFName,
+  PDFDict,
+  PDFRef,
+  PDFOperator,
+  PDFOperatorNames,
   StandardFonts,
   rgb,
   pushGraphicsState,
@@ -10,6 +14,7 @@ import {
   moveTo,
   lineTo,
   stroke,
+  concatTransformationMatrix,
 } from 'pdf-lib'
 import { BlendMode } from 'pdf-lib'
 import { readAnnots } from '../annots/read.js'
@@ -152,10 +157,72 @@ export async function flattenAnnots(bytes: Uint8Array): Promise<Uint8Array> {
           break
         }
 
-        case 'stamp':
-          // Stamp appearance-stream draw is deferred to Phase 4b.
-          // /Annots removal still happens below so the dict is cleaned up.
+        case 'stamp': {
+          // A stamp's only visual is its /AP /N Form XObject — nothing is ever
+          // drawn into page content by stamp.ts; the appearance stream IS the
+          // visual.  Copy that stream into the page's /Resources /XObject under
+          // a fresh name, then emit  q <w> 0 0 <h> <x> <y> cm /<name> Do Q.
+          //
+          // Placement derivation: stamp.ts builds BBox=[0,0,w,h] for the Form
+          // XObject (see packages/core/src/annots/stamp.ts).  To map that box
+          // to the annotation's page rect [x, y, x+w, y+h] we need a CTM that
+          // scales and translates:  [w 0 0 h x y] (no rotation, no y-flip).
+          const pageNode = page.node
+          const annotsArr = pageNode.Annots()
+          if (annotsArr) {
+            for (let i = 0; i < annotsArr.size(); i++) {
+              const annotDict = annotsArr.lookupMaybe(i, PDFDict)
+              if (!annotDict) continue
+              const subtype = annotDict.lookupMaybe(PDFName.of('Subtype'), PDFName)
+              if (subtype?.asString() !== '/Stamp') continue
+
+              // Get /AP /N — the normal appearance Form XObject ref.
+              const apDict = annotDict.lookupMaybe(PDFName.of('AP'), PDFDict)
+              if (!apDict) break
+              const apNRef = apDict.get(PDFName.of('N'))
+              if (!(apNRef instanceof PDFRef)) break
+
+              // Ensure page has a /Resources /XObject dict to register into.
+              const resources =
+                pageNode.Resources() ??
+                (() => {
+                  const r = doc.context.obj({})
+                  pageNode.set(PDFName.of('Resources'), r)
+                  return pageNode.Resources()!
+                })()
+
+              let xobjDict = resources.lookupMaybe(PDFName.of('XObject'), PDFDict)
+              if (!xobjDict) {
+                xobjDict = doc.context.obj({}) as PDFDict
+                resources.set(PDFName.of('XObject'), xobjDict)
+              }
+
+              // Pick a name that won't clash with existing XObjects on this page.
+              let nameIdx = 0
+              let xName: string
+              do {
+                xName = `PdfxStamp${nameIdx++}`
+              } while (xobjDict.lookupMaybe(PDFName.of(xName), PDFDict) !== undefined)
+
+              xobjDict.set(PDFName.of(xName), apNRef)
+
+              // Emit placement operators:  q  w 0 0 h x y cm  /Name Do  Q
+              // Placement derivation: stamp.ts BBox=[0,0,w,h]; the CTM
+              //   [w 0 0 h x y] maps that box to page rect [x, y, x+w, y+h].
+              const { x, y, w, h } = a.rect
+              page.pushOperators(
+                pushGraphicsState(),
+                concatTransformationMatrix(w, 0, 0, h, x, y),
+                PDFOperator.of(PDFOperatorNames.DrawObject, [PDFName.of(xName)]),
+                popGraphicsState(),
+              )
+
+              // Only one stamp dict per annot, stop scanning once matched.
+              break
+            }
+          }
           break
+        }
       }
     }
 

@@ -1,9 +1,23 @@
 import { describe, it, expect } from 'vitest'
 import { inflateSync } from 'zlib'
-import { PDFDocument, PDFName, PDFRawStream, PDFArray, PDFRef } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFRawStream, PDFArray, PDFRef, PDFDict } from 'pdf-lib'
 import { writeAnnots } from '../src/annots/write.js'
+import { writeStampAnnots } from '../src/annots/stamp.js'
 import { flattenAnnots } from '../src/ops/flatten.js'
 import type { Annot } from '../src/annots/model.js'
+
+// Minimal 1×1 white PNG (67 bytes) — used for stamp tests.
+const TINY_PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // PNG signature
+  0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, // IHDR chunk length + type
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // width=1, height=1
+  0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, // bit depth=8, colorType=2 (RGB), CRC
+  0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, // IDAT chunk length + type
+  0x54, 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, // compressed pixel data
+  0x00, 0x00, 0x02, 0x00, 0x01, 0xe2, 0x21, 0xbc, // data + CRC
+  0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, // IEND chunk length + type
+  0x44, 0xae, 0x42, 0x60, 0x82,                   // IEND CRC
+])
 
 /**
  * Decode all content streams on the first page of a saved PDF and return their
@@ -184,13 +198,52 @@ describe('flattenAnnots', () => {
     expect(doc.getPages()[0].node.Annots()).toBeUndefined()
   })
 
-  it('stamp annot: /Annots removed (stamp draw skipped)', async () => {
-    // stamps are accepted-deferred in Phase 4b; flatten still removes /Annots
-    // but since writeAnnots skips stamps no /Annots entry exists to start with
-    const pdf = await blankPdf()
-    const flat = await flattenAnnots(pdf)
+  it('stamp annot: /Annots removed after flattening', async () => {
+    // writeStampAnnots adds a /Stamp annot with /AP /N appearance stream;
+    // flattenAnnots must remove /Annots AND draw the appearance into content.
+    const withStamp = await writeStampAnnots(await blankPdf(), [
+      { page: 0, rect: { x: 100, y: 200, w: 50, h: 30 }, png: TINY_PNG },
+    ])
+    const flat = await flattenAnnots(withStamp)
     const doc = await PDFDocument.load(flat)
     expect(doc.getPages()[0].node.Annots()).toBeUndefined()
+  })
+
+  it('stamp flatten: /AP /N XObject copied into page /Resources and invoked via Do', async () => {
+    // After flattening: no /Annots, the stamp's Form XObject must live in the
+    // page's /Resources /XObject, and the content stream must contain a Do call.
+    const withStamp = await writeStampAnnots(await blankPdf(), [
+      { page: 0, rect: { x: 100, y: 200, w: 50, h: 30 }, png: TINY_PNG },
+    ])
+    const flat = await flattenAnnots(withStamp)
+
+    const doc = await PDFDocument.load(flat)
+    const page = doc.getPages()[0]
+
+    // (a) No /Annots remaining
+    expect(page.node.Annots()).toBeUndefined()
+
+    // (b) Page /Resources /XObject has at least one entry
+    const resources = page.node.Resources()
+    expect(resources).toBeDefined()
+    const xobjDict = resources!.lookupMaybe(PDFName.of('XObject'), PDFDict)
+    expect(xobjDict).toBeDefined()
+    expect(xobjDict!.keys().length).toBeGreaterThan(0)
+
+    // (c) Content stream invokes the XObject via Do
+    const text = await pageContentText(flat)
+    expect(text).toContain('Do')
+  })
+
+  it('stamp flatten: content stream placement matrix encodes rect x/y/w/h', async () => {
+    // stamp.ts BBox=[0,0,w,h]; placement matrix maps it to page rect [x,y,x+w,y+h].
+    // Expected cm: "w 0 0 h x y cm" → "50 0 0 30 100 200 cm"
+    const withStamp = await writeStampAnnots(await blankPdf(), [
+      { page: 0, rect: { x: 100, y: 200, w: 50, h: 30 }, png: TINY_PNG },
+    ])
+    const flat = await flattenAnnots(withStamp)
+    const text = await pageContentText(flat)
+    expect(text).toContain('50 0 0 30 100 200 cm')
   })
 
   it('returns valid PDF bytes (parseable by PDFDocument.load)', async () => {
