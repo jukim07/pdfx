@@ -1,17 +1,8 @@
 import { PDFDocument, degrees } from 'pdf-lib'
-import { parsePageRanges } from './page-ranges.js'
+import { indicesFor } from './_shared.js'
 
 async function load(bytes: Uint8Array): Promise<PDFDocument> {
   return PDFDocument.load(bytes, { ignoreEncryption: true })
-}
-
-function indicesFor(doc: PDFDocument, ranges: string | undefined, op: string): number[] {
-  const count = doc.getPageCount()
-  const idxs = ranges === undefined
-    ? Array.from({ length: count }, (_, i) => i)
-    : parsePageRanges(ranges, count)
-  if (idxs.length === 0) throw new RangeError(`${op}: ranges "${ranges}" matches no pages (doc has ${count})`)
-  return idxs
 }
 
 /** Set /Rotate (absolute) on the selected pages; all pages when ranges omitted. */

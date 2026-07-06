@@ -1,20 +1,11 @@
 import { PDFDocument } from 'pdf-lib'
-import { parsePageRanges } from './page-ranges.js'
+import { indicesFor } from './_shared.js'
 
 export interface Box {
   x: number
   y: number
   width: number
   height: number
-}
-
-function indicesFor(doc: PDFDocument, ranges: string | undefined, op: string): number[] {
-  const count = doc.getPageCount()
-  const idxs = ranges === undefined
-    ? Array.from({ length: count }, (_, i) => i)
-    : parsePageRanges(ranges, count)
-  if (idxs.length === 0) throw new RangeError(`${op}: ranges "${ranges}" matches no pages (doc has ${count})`)
-  return idxs
 }
 
 /**
