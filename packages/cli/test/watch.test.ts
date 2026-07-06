@@ -94,7 +94,7 @@ describe('watchExtract', () => {
     writeFileSync(path.join(inDir, 'already.pdf.done'), '')
 
     // Give chokidar time to fire any spurious events
-    await new Promise<void>((r) => setTimeout(r, 600))
+    await new Promise<void>((r) => setTimeout(r, 1000))
     await stop()
 
     expect(lines).toHaveLength(0)
