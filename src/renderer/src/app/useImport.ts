@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { findConverter } from '@pdfx/core'
 import { importIntoDocs, loadIncomingPages } from '../pdfx/source'
 import { dedupeNames } from './names'
@@ -14,6 +14,7 @@ export function useImport(
   flash: (message: string) => void
 ) {
   const { docsRef, dispatch, appendPagesToDoc, insertPagesIntoDoc, spliceDocsAfter } = collection
+  const [openedPaths, setOpenedPaths] = useState<string[]>([])
 
   const addFiles = useCallback(
     async (files: IncomingFile[]) => {
@@ -21,6 +22,7 @@ export function useImport(
       setBusy(true)
       const failed: string[] = []
       const allEntries: import('../types').DocEntry[] = []
+      const paths: string[] = []
       for (const file of files) {
         try {
           const conv = findConverter(file.name, file.data)
@@ -31,6 +33,7 @@ export function useImport(
           const provenance = buildProvenance(file, conv !== null)
           const entries = await importIntoDocs(name, data, provenance)
           allEntries.push(...entries)
+          if (file.path) paths.push(file.path)
         } catch (error) {
           console.error(`Failed to import ${file.name}`, error)
           failed.push(file.name)
@@ -42,6 +45,9 @@ export function useImport(
           do: () => [...snapshot, ...dedupeNames(snapshot, allEntries)],
           undo: () => snapshot
         })
+      }
+      if (paths.length > 0) {
+        setOpenedPaths((prev) => [...new Set([...prev, ...paths])])
       }
       setBusy(false)
       if (failed.length > 0) flash(`Could not open ${failed.join(', ')}`)
@@ -105,5 +111,5 @@ export function useImport(
     [addFiles, insertPagesIntoDoc, spliceDocsAfter, flash, setBusy, docsRef]
   )
 
-  return { addFiles, openViaDialog, addPagesToDoc, handleExternalDropFiles }
+  return { addFiles, openViaDialog, addPagesToDoc, handleExternalDropFiles, openedPaths }
 }

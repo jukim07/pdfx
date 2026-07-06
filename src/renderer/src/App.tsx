@@ -10,6 +10,7 @@ import { useCollection } from './app/useCollection'
 import { useFullView } from './app/useFullView'
 import { useExport } from './app/useExport'
 import { useImport } from './app/useImport'
+import { useWorkspace } from './app/useWorkspace'
 import { usePaste } from './app/usePaste'
 import { useDragController } from './app/useDragController'
 import { useKeyboardShortcuts } from './app/useKeyboardShortcuts'
@@ -283,11 +284,21 @@ export default function App(): React.JSX.Element {
   )
 
   const { exportCollection, exportZip } = useExport(docs, setBusy, flash)
-  const { addFiles, openViaDialog, addPagesToDoc, handleExternalDropFiles } = useImport(
+  const { addFiles, openViaDialog, addPagesToDoc, handleExternalDropFiles, openedPaths } = useImport(
     collection,
     setBusy,
     flash
   )
+
+  const handleRestore = useCallback(
+    async (paths: string[]) => {
+      const files = await window.api.expandDropPaths(paths)
+      if (files.length > 0) void addFiles(files)
+    },
+    [addFiles]
+  )
+  useWorkspace(openedPaths, handleRestore)
+
   const { handlePaste } = usePaste(collection, addFiles, setBusy, flash)
 
   const drag = useDragController({

@@ -1,7 +1,7 @@
 import { ipcMain, dialog, clipboard, app } from 'electron'
-import { basename, isAbsolute } from 'path'
+import { basename, isAbsolute, join } from 'path'
 import { existsSync } from 'fs'
-import { writeFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import { markupToPdf } from './markup'
 import { OpenedFile, IMPORTABLE, readFiles, expandDropPaths } from './file-intake'
 import { clipboardFilePaths } from './clipboard'
@@ -208,4 +208,21 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
       throw new Error(`unknown watermark op: ${op}`)
     }
   )
+
+  ipcMain.handle('pdfx:read-settings', async (): Promise<string | null> => {
+    const p = join(app.getPath('userData'), 'pdfx-settings.json')
+    try {
+      return await readFile(p, 'utf-8')
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('pdfx:write-settings', async (_event, json: string): Promise<void> => {
+    if (typeof json !== 'string' || json.length > 1024 * 1024) {
+      throw new Error('write-settings: refusing invalid payload')
+    }
+    const p = join(app.getPath('userData'), 'pdfx-settings.json')
+    await writeFile(p, json, 'utf-8')
+  })
 }

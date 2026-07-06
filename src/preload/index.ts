@@ -88,7 +88,9 @@ const api = {
   stripWatermark: (bytes: Uint8Array, candidateId: string): Promise<Uint8Array> =>
     ipcRenderer.invoke('pdfx:watermark-op', 'strip', bytes, candidateId),
   rebuildLegible: (bytes: Uint8Array): Promise<Uint8Array> =>
-    ipcRenderer.invoke('pdfx:watermark-op', 'legible', bytes)
+    ipcRenderer.invoke('pdfx:watermark-op', 'legible', bytes),
+  readSettings: (): Promise<string | null> => ipcRenderer.invoke('pdfx:read-settings'),
+  writeSettings: (json: string): Promise<void> => ipcRenderer.invoke('pdfx:write-settings', json)
 }
 
 export type PdfxApi = typeof api
