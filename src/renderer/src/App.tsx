@@ -294,6 +294,7 @@ export default function App(): React.JSX.Element {
     layout,
     canvasRef,
     compareMode: collection.compareMode,
+    axisFlip,
     movePageInto: collection.movePageInto,
     movePageToNewDoc: collection.movePageToNewDoc,
     onExternalDrop: handleExternalDropFiles
@@ -462,6 +463,7 @@ export default function App(): React.JSX.Element {
         <CollectionCanvas
           docs={docs}
           layout={layout}
+          axisFlip={axisFlip}
           busy={busy}
           pagesDraggable={totalPages >= 2}
           renderVersion={renderVersion}

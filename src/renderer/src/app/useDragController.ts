@@ -10,6 +10,7 @@ interface DragControllerDeps {
   layout: CanvasLayout
   canvasRef: React.RefObject<CanvasHandle | null>
   compareMode: boolean
+  axisFlip: boolean
   movePageInto: (source: PageRef, targetDocId: string, index: number) => void
   movePageToNewDoc: (source: PageRef, docIndex: number) => void
   onExternalDrop: (files: IncomingFile[], target: DropTarget | null) => void
@@ -90,6 +91,7 @@ export function useDragController(deps: DragControllerDeps) {
     layout: deps.layout,
     canvasRef: deps.canvasRef,
     compareMode: deps.compareMode,
+    axisFlip: deps.axisFlip,
     dragKind,
     draggingPage,
     dropTarget,

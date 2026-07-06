@@ -26,9 +26,35 @@ export function computeDropTarget(
   worldY: number,
   scale: number,
   excludeId: string | null,
-  allowInto: boolean
+  allowInto: boolean,
+  axisFlip = false
 ): DropTarget {
   const items = layout.items
+
+  if (axisFlip) {
+    // Horizontal strip: docs advance in X; doc height may vary per item.
+    if (allowInto && DOC_HEIGHT * scale >= INTO_MIN_SCREEN_PX) {
+      for (const item of items) {
+        if (
+          worldX >= item.x && worldX <= item.x + item.width &&
+          worldY >= item.y && worldY <= item.y + item.height
+        ) {
+          return {
+            kind: 'into',
+            docId: item.doc.id,
+            index: insertionIndexInStrip(item, worldX, excludeId)
+          }
+        }
+      }
+    }
+    let docIndex = 0
+    for (const item of items) {
+      if (item.x + item.width / 2 < worldX) docIndex++
+    }
+    return { kind: 'between', docIndex }
+  }
+
+  // Default vertical layout: docs advance in Y.
   if (allowInto && DOC_HEIGHT * scale >= INTO_MIN_SCREEN_PX) {
     for (const item of items) {
       if (worldY >= item.y && worldY <= item.y + DOC_HEIGHT) {
@@ -47,9 +73,28 @@ export function computeDropTarget(
   return { kind: 'between', docIndex }
 }
 
-export function betweenSlotY(layout: CanvasLayout, docIndex: number): number {
+/** Axis-aware slot position for the between-doc ghost and AddDocGhost. */
+export function betweenSlotPos(
+  layout: CanvasLayout,
+  docIndex: number,
+  axisFlip: boolean
+): { x: number; y: number } {
   const items = layout.items
-  if (items.length === 0) return 0
-  if (docIndex >= items.length) return items[items.length - 1].y + DOC_SLOT
-  return items[docIndex].y
+  if (axisFlip) {
+    if (items.length === 0) return { x: 0, y: 0 }
+    if (docIndex >= items.length) {
+      const last = items[items.length - 1]
+      return { x: last.x + last.width + DOC_SLOT, y: 0 }
+    }
+    return { x: items[docIndex].x, y: 0 }
+  }
+  // Default (vertical): advancing Y.
+  if (items.length === 0) return { x: 0, y: 0 }
+  if (docIndex >= items.length) return { x: 0, y: items[items.length - 1].y + DOC_SLOT }
+  return { x: 0, y: items[docIndex].y }
+}
+
+/** @deprecated Use betweenSlotPos(layout, docIndex, false).y for default-mode callers. */
+export function betweenSlotY(layout: CanvasLayout, docIndex: number): number {
+  return betweenSlotPos(layout, docIndex, false).y
 }

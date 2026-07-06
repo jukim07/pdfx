@@ -11,6 +11,7 @@ export interface RootDragDeps {
   layout: CanvasLayout
   canvasRef: React.RefObject<CanvasHandle | null>
   compareMode: boolean
+  axisFlip: boolean
   dragKind: 'internal' | 'external' | null
   draggingPage: PageRef | null
   dropTarget: DropTarget | null
@@ -57,8 +58,8 @@ export function createRootDragHandlers(deps: RootDragDeps): RootDragHandlers {
     if (!w) return
     deps.updateDropTarget(
       internal
-        ? computeDropTarget(deps.layout, w.x, w.y, w.k, deps.collapsedId, true)
-        : computeDropTarget(deps.layout, w.x, w.y, w.k, null, deps.externalCount <= 1)
+        ? computeDropTarget(deps.layout, w.x, w.y, w.k, deps.collapsedId, true, deps.axisFlip)
+        : computeDropTarget(deps.layout, w.x, w.y, w.k, null, deps.externalCount <= 1, deps.axisFlip)
     )
   }
 
@@ -77,7 +78,7 @@ export function createRootDragHandlers(deps: RootDragDeps): RootDragHandlers {
     if (internal && deps.draggingPage) {
       const source = deps.draggingPage
       const target = w
-        ? computeDropTarget(deps.layout, w.x, w.y, w.k, source.pageId, true)
+        ? computeDropTarget(deps.layout, w.x, w.y, w.k, source.pageId, true, deps.axisFlip)
         : deps.dropTarget
       deps.clearDrag()
       if (target?.kind === 'into') deps.movePageInto(source, target.docId, target.index)
@@ -95,7 +96,7 @@ export function createRootDragHandlers(deps: RootDragDeps): RootDragHandlers {
     const dropped = Array.from(event.dataTransfer.files)
     const paths = dropped.map((f) => window.api.getPathForFile(f))
     const target = w
-      ? computeDropTarget(deps.layout, w.x, w.y, w.k, null, dropped.length <= 1)
+      ? computeDropTarget(deps.layout, w.x, w.y, w.k, null, dropped.length <= 1, deps.axisFlip)
       : deps.dropTarget
     deps.clearDrag()
     if (paths.length > 0 && paths.every(Boolean)) {

@@ -92,5 +92,5 @@ export function computeLayout(docs: DocEntry[], axisFlip = false): CanvasLayout 
 
 export const DOC_SLOT = DOC_HEIGHT + DOC_GAP_Y
 
-export { computeDropTarget, betweenSlotY } from './drop-target'
+export { computeDropTarget, betweenSlotY, betweenSlotPos } from './drop-target'
 export type { DropTarget } from './drop-target'

@@ -1,4 +1,4 @@
-import { BASE_PAGE_HEIGHT, MIN_DOC_WIDTH, betweenSlotY } from '../canvas/layout'
+import { BASE_PAGE_HEIGHT, MIN_DOC_WIDTH, betweenSlotPos } from '../canvas/layout'
 import { Canvas } from './Canvas'
 import { EmptyState } from './EmptyState'
 import { AddDocGhost, GhostRow } from './DropGhost'
@@ -14,6 +14,7 @@ import type { CropRect } from './CropOverlay'
 interface CollectionCanvasProps {
   docs: DocEntry[]
   layout: CanvasLayout
+  axisFlip: boolean
   busy: boolean
   pagesDraggable: boolean
   renderVersion: number
@@ -45,7 +46,7 @@ interface CollectionCanvasProps {
 }
 
 export function CollectionCanvas(props: CollectionCanvasProps): React.JSX.Element {
-  const { docs, layout, dragKind, draggingPage, dropTarget, externalCount } = props
+  const { docs, layout, axisFlip, dragKind, draggingPage, dropTarget, externalCount } = props
 
   const { intoDocId, intoIndex, betweenIndex, ghostSize, betweenPages } = deriveDropGhosts(
     docs,
@@ -115,14 +116,22 @@ export function CollectionCanvas(props: CollectionCanvasProps): React.JSX.Elemen
       {dropTarget?.kind === 'between' && (
         <div
           className="canvas-doc ghost-doc"
-          style={{ left: 0, top: betweenSlotY(layout, dropTarget.docIndex), width: MIN_DOC_WIDTH }}
+          style={{
+            left: betweenSlotPos(layout, dropTarget.docIndex, axisFlip).x,
+            top: betweenSlotPos(layout, dropTarget.docIndex, axisFlip).y,
+            width: MIN_DOC_WIDTH
+          }}
         >
           <GhostRow width={MIN_DOC_WIDTH} pageHeight={BASE_PAGE_HEIGHT} pages={betweenPages} />
         </div>
       )}
       <div
         className="canvas-doc"
-        style={{ left: 0, top: betweenSlotY(layout, layout.items.length), width: MIN_DOC_WIDTH }}
+        style={{
+          left: betweenSlotPos(layout, layout.items.length, axisFlip).x,
+          top: betweenSlotPos(layout, layout.items.length, axisFlip).y,
+          width: MIN_DOC_WIDTH
+        }}
       >
         <AddDocGhost width={MIN_DOC_WIDTH} onClick={props.onOpen} />
       </div>
