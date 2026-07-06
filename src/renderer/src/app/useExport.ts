@@ -29,7 +29,12 @@ export function useExport(
       try {
         const filename = path.split(/[\\/]/).pop() ?? `untitled.${kind}`
         const bytes = await buildPdfx(
-          docs.map((doc) => ({ name: doc.name, pages: doc.pages.map(toExportPage) })),
+          await Promise.all(
+            docs.map(async (doc) => ({
+              name: doc.name,
+              pages: await Promise.all(doc.pages.map(toExportPage))
+            }))
+          ),
           stripExtension(filename).replace(/\.pdf$/i, '')
         )
         const saved = await window.api.writeFile(path, bytes)
@@ -60,7 +65,7 @@ export function useExport(
         let filename = `${safeName}.pdf`
         for (let n = 2; used.has(filename); n++) filename = `${safeName} (${n}).pdf`
         used.add(filename)
-        entries[filename] = await buildPdf(doc.pages.map(toExportPage))
+        entries[filename] = await buildPdf(await Promise.all(doc.pages.map(toExportPage)))
       }
       const saved = await window.api.writeFile(path, zipSync(entries))
       flash(`Saved ${saved}`)

@@ -1,5 +1,6 @@
 import { getDocument } from 'pdfjs-dist'
-import { findConverter, partitionPages, readManifest, stripExtension } from '@pdfx/core'
+import { findConverter, partitionPages, pullPages, readManifest, rotatePages, stripExtension } from '@pdfx/core'
+import type { ExportPage } from '@pdfx/core'
 import type { DocEntry, PageEntry, PdfSource } from '../types'
 
 interface PageSize {
@@ -12,11 +13,6 @@ export interface LoadedSource {
   sizes: PageSize[]
 }
 
-export interface ExportPageRef {
-  sourceKey: string
-  bytes: Uint8Array
-  pageIndex: number
-}
 
 // A crafted PDF can advertise an enormous page count (or a shared/cyclic page tree)
 // to exhaust renderer memory; refuse to materialize an absurd number of pages.
@@ -61,11 +57,16 @@ export async function importIntoDocs(filename: string, bytes: Uint8Array): Promi
   }))
 }
 
-export const toExportPage = (page: PageEntry): ExportPageRef => ({
-  sourceKey: page.source.id,
-  bytes: page.source.bytes,
-  pageIndex: page.pageIndex
-})
+export async function toExportPage(page: PageEntry): Promise<ExportPage> {
+  if (!page.rotation) {
+    return { sourceKey: page.source.id, bytes: page.source.bytes, pageIndex: page.pageIndex }
+  }
+  // Bake edits into a single-page PDF so buildPdf/buildPdfx copy the edited page.
+  // sourceKey must be unique per edited page: the baked bytes differ from the source doc.
+  let bytes = await pullPages(page.source.bytes, String(page.pageIndex + 1))
+  bytes = await rotatePages(bytes, page.rotation)
+  return { sourceKey: page.id, bytes, pageIndex: 0 }
+}
 
 export async function loadIncomingPages(
   files: { name: string; data: Uint8Array; path?: string }[],

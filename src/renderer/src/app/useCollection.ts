@@ -36,6 +36,22 @@ export function useCollection(flash: (message: string) => void) {
     setDocs((prev) => docOps.renameDoc(prev, id, name))
   }, [])
 
+  const rotatePage = useCallback((docId: string, pageId: string, delta: 90 | -90) => {
+    setDocs((prev) =>
+      prev.map((doc) => {
+        if (doc.id !== docId) return doc
+        return {
+          ...doc,
+          pages: doc.pages.map((p) => {
+            if (p.id !== pageId) return p
+            const current = p.rotation ?? 0
+            return { ...p, rotation: (((current + delta) % 360) + 360) % 360 }
+          })
+        }
+      })
+    )
+  }, [])
+
   const moveDoc = useCallback((id: string, direction: -1 | 1) => {
     setDocs((prev) => docOps.reorderDoc(prev, id, direction))
   }, [])
@@ -101,6 +117,7 @@ export function useCollection(flash: (message: string) => void) {
     clearSelection,
     removeDoc,
     renameDoc,
+    rotatePage,
     moveDoc,
     deletePage,
     copySelected,

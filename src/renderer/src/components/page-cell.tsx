@@ -22,6 +22,7 @@ interface PageCellProps {
   onOpenPage: (docId: string, pageId: string) => void
   onPageDragStart: (docId: string, pageId: string) => void
   onPageDragEnd: () => void
+  onRotatePage: (docId: string, pageId: string, delta: 90 | -90) => void
 }
 
 function PageCellImpl({
@@ -40,7 +41,8 @@ function PageCellImpl({
   onSelectPage,
   onOpenPage,
   onPageDragStart,
-  onPageDragEnd
+  onPageDragEnd,
+  onRotatePage
 }: PageCellProps): React.JSX.Element {
   return (
     <div
@@ -93,10 +95,33 @@ function PageCellImpl({
         naturalWidth={page.width}
         naturalHeight={page.height}
         version={renderVersion}
+        rotation={page.rotation ?? 0}
         highlightQuery={highlightQuery}
         ocrWords={ocrWords}
       />
       <span className="page-number">{visibleNumber}</span>
+      <div className="page-hover-actions">
+        <button
+          type="button"
+          title="Rotate counter-clockwise"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRotatePage(docId, page.id, -90)
+          }}
+        >
+          ⟲
+        </button>
+        <button
+          type="button"
+          title="Rotate clockwise"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRotatePage(docId, page.id, 90)
+          }}
+        >
+          ⟳
+        </button>
+      </div>
     </div>
   )
 }

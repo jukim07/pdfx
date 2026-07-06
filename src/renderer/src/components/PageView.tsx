@@ -12,6 +12,7 @@ interface PageViewProps {
   version: number
   eager?: boolean
   detail?: boolean
+  rotation?: number // 0 | 90 | 180 | 270, CSS-preview only; export baking is toExportPage's job
   highlightQuery?: string
   ocrWords?: OcrWord[]
 }
@@ -24,6 +25,7 @@ function PageViewImpl({
   version,
   eager = false,
   detail = true,
+  rotation = 0,
   highlightQuery,
   ocrWords
 }: PageViewProps): React.JSX.Element {
@@ -115,7 +117,11 @@ function PageViewImpl({
   }, [near, version, detail, pdf, pageNumber, naturalWidth, naturalHeight])
 
   return (
-    <div className="pageview" ref={rootRef}>
+    <div
+      className="pageview"
+      ref={rootRef}
+      style={rotation ? { transform: `rotate(${rotation}deg)`, transformOrigin: 'center center' } : undefined}
+    >
       <canvas ref={baseRef} className={baseReady ? 'pageview-base ready' : 'pageview-base'} />
       <canvas ref={detailRef} className="pageview-detail" style={{ display: 'none' }} />
       {near && highlightQuery ? (

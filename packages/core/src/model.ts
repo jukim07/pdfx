@@ -17,6 +17,7 @@ export interface PageEntry {
   pageIndex: number
   width: number
   height: number
+  rotation?: number // 0 | 90 | 180 | 270; undefined === 0
 }
 
 export interface DocEntry {

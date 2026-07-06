@@ -19,6 +19,7 @@ interface DocumentRowProps {
   onPageDragStart: (docId: string, pageId: string) => void
   onPageDragEnd: () => void
   onAddPage: (docId: string) => void
+  onRotatePage: (docId: string, pageId: string, delta: 90 | -90) => void
 }
 
 function DocumentRowImpl({
@@ -34,7 +35,8 @@ function DocumentRowImpl({
   onOpenPage,
   onPageDragStart,
   onPageDragEnd,
-  onAddPage
+  onAddPage,
+  onRotatePage
 }: DocumentRowProps): React.JSX.Element {
   const { active, query, matchingDocIds, matchingPageIds, getOcrWords } = useFindState()
   const docDimmed = active && !matchingDocIds.has(doc.id)
@@ -71,6 +73,7 @@ function DocumentRowImpl({
         onOpenPage={onOpenPage}
         onPageDragStart={onPageDragStart}
         onPageDragEnd={onPageDragEnd}
+        onRotatePage={onRotatePage}
       />
     )
     if (!collapsed) visible++

@@ -36,6 +36,7 @@ interface CollectionCanvasProps {
   onMoveDoc: (docId: string, direction: -1 | 1) => void
   onRemoveDoc: (docId: string) => void
   onRenameDoc: (docId: string, name: string) => void
+  onRotatePage: (docId: string, pageId: string, delta: 90 | -90) => void
 }
 
 export function CollectionCanvas(props: CollectionCanvasProps): React.JSX.Element {
@@ -100,6 +101,7 @@ export function CollectionCanvas(props: CollectionCanvasProps): React.JSX.Elemen
         onPageDragStart={props.onPageDragStart}
         onPageDragEnd={props.onPageDragEnd}
         onAddPage={props.onAddPage}
+        onRotatePage={props.onRotatePage}
       />
       {dropTarget?.kind === 'between' && (
         <div

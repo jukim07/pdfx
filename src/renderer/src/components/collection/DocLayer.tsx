@@ -22,6 +22,7 @@ interface DocLayerProps {
   onPageDragStart: (docId: string, pageId: string) => void
   onPageDragEnd: () => void
   onAddPage: (docId: string) => void
+  onRotatePage: (docId: string, pageId: string, delta: 90 | -90) => void
 }
 
 function DocLayerImpl(props: DocLayerProps): React.JSX.Element {
@@ -66,6 +67,7 @@ function DocLayerImpl(props: DocLayerProps): React.JSX.Element {
               onPageDragStart={props.onPageDragStart}
               onPageDragEnd={props.onPageDragEnd}
               onAddPage={props.onAddPage}
+              onRotatePage={props.onRotatePage}
             />
           </div>
         )

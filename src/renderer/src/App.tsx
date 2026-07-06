@@ -168,6 +168,7 @@ export default function App(): React.JSX.Element {
           onMoveDoc={collection.moveDoc}
           onRemoveDoc={collection.removeDoc}
           onRenameDoc={collection.renameDoc}
+          onRotatePage={collection.rotatePage}
         />
 
         {fullView && fullViewDoc && (
