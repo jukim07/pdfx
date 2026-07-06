@@ -11,8 +11,13 @@ export async function rasterizeRedact(
   opts: RedactOptions,
 ): Promise<Uint8Array> {
   const dpi = opts.dpi ?? 300
-  // Unique 0-based page indices that have at least one region.
-  const pageSet = [...new Set(regions.map((r) => r.page))]
+  // Iterate in DESCENDING order so that removePage(k) on a lower index does not
+  // shift the positions of pages at higher indices that we have not yet processed.
+  // Ascending order is safe here only because each iteration does a paired
+  // removePage+insertPage at the same index (restoring the count), but descending
+  // is the correct invariant to state and enforces correctness if the loop body
+  // ever changes.
+  const pageSet = [...new Set(regions.map((r) => r.page))].sort((a, b) => b - a)
 
   const doc = await PDFDocument.load(bytes)
 
@@ -57,5 +62,10 @@ export async function rasterizeRedact(
     fresh.drawImage(embedded, { x: 0, y: 0, width, height })
   }
 
+  // Forensic limitation: pdf-lib's save() serializes the full object graph,
+  // including unreferenced objects left over from removed pages. The original
+  // page streams remain as orphaned bytes in the output file — extraction-layer
+  // redaction (text/image APIs) holds, but binary scrubbing of those orphaned
+  // streams is out of scope for this library.
   return doc.save()
 }
