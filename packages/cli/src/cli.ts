@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { PDFDocument } from 'pdf-lib'
 import {
-  cropPages, deletePages, mergeInputs, pullPages, resetCrop, rotatePages, splitPdfx,
+  cropPages, deletePages, flattenAnnots, mergeInputs, pullPages, resetCrop, rotatePages, splitPdfx,
   parseManifest, stripExtension, type MergeInput, type PdfxManifest
 } from '@pdfx/core'
 import { extractArtifacts, extractAssets, type ExtractArtifactsOptions } from '@pdfx/core/extract'
@@ -30,6 +30,7 @@ const USAGE = `Usage:
   pdfx rotate <file> --angle <deg> [--pages <ranges>] -o <out.pdf> [-f] [--json]
   pdfx crop <file> --box x,y,w,h [--pages <ranges>] [--reset] -o <out.pdf> [-f] [--json]
   pdfx assets <file> -o <outDir> [--json]
+  pdfx flatten <file.pdf> [-o <out.pdf>] [-f]
 
 Exit codes: 0 success, 1 operational error, 2 usage error.`
 
@@ -471,6 +472,43 @@ async function runExtract(rest: string[], io: CliIo): Promise<number> {
   }
 }
 
+async function runFlatten(rest: string[], io: CliIo): Promise<number> {
+  let parsed
+  try {
+    parsed = parseArgs({
+      args: rest,
+      allowPositionals: true,
+      options: {
+        out: { type: 'string', short: 'o' },
+        force: { type: 'boolean', short: 'f' }
+      }
+    })
+  } catch (error) {
+    io.err(error instanceof Error ? error.message : String(error))
+    io.err(USAGE)
+    return EXIT_USAGE
+  }
+  const file = parsed.positionals[0]
+  if (!file || parsed.positionals.length > 1) {
+    io.err(USAGE)
+    return EXIT_USAGE
+  }
+  const outPath = parsed.values.out ?? file.replace(/\.pdf$/i, '.flat.pdf')
+  try {
+    const guard = await guardOutput(outPath, parsed.values.force ?? false)
+    if (guard) { io.err(guard); return EXIT_ERROR }
+    const bytes = await loadInput(file)
+    const flat = await flattenAnnots(bytes)
+    await mkdir(dirname(outPath), { recursive: true })
+    await writeFile(outPath, flat)
+    io.out(`flatten: wrote ${outPath}`)
+    return EXIT_OK
+  } catch (error) {
+    io.err(`pdfx flatten: ${error instanceof Error ? error.message : String(error)}`)
+    return EXIT_ERROR
+  }
+}
+
 export async function runCli(
   argv: string[],
   io: CliIo = { out: console.log, err: console.error }
@@ -488,6 +526,7 @@ export async function runCli(
     return runSurgery(verb, rest, io)
   }
   if (verb === 'assets') return runAssets(rest, io)
+  if (verb === 'flatten') return runFlatten(rest, io)
   io.err(`Unknown command "${verb}"`)
   io.err(USAGE)
   return EXIT_USAGE
