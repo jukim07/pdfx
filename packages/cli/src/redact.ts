@@ -15,8 +15,10 @@ import { EXIT_OK, EXIT_ERROR, EXIT_USAGE } from './cli.js'
 function parseBox(spec: string): RedactRegion {
   const m = /^(\d+):([\d.]+),([\d.]+),([\d.]+),([\d.]+)$/.exec(spec)
   if (!m) throw new Error(`--box must be "page:x,y,w,h" (1-based page); got "${spec}"`)
+  const page1 = parseInt(m[1], 10)
+  if (page1 < 1) throw new Error(`--box page must be >= 1 (1-based); got ${page1}`)
   return {
-    page: parseInt(m[1], 10) - 1, // 1-based CLI → 0-based model
+    page: page1 - 1, // 1-based CLI → 0-based model
     rect: { x: parseFloat(m[2]), y: parseFloat(m[3]), w: parseFloat(m[4]), h: parseFloat(m[5]) }
   }
 }
@@ -76,6 +78,12 @@ export async function runRedact(rest: string[], io: CliIo): Promise<number> {
       io.err(`pdfx redact: ${error instanceof Error ? error.message : String(error)}`)
       return EXIT_USAGE
     }
+  }
+
+  // --pages only applies to --find/--regex; reject upfront so the user doesn't get silently wrong behavior
+  if (flags.pages !== undefined && !hasFind && !hasRegex) {
+    io.err('pdfx redact: --pages only applies to --find/--regex')
+    return EXIT_USAGE
   }
 
   // Parse --pages (1-based user input; parsePageRanges returns 0-based)

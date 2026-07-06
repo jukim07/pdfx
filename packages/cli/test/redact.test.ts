@@ -19,6 +19,17 @@ async function buildSsnFixture(): Promise<Uint8Array> {
   return doc.save()
 }
 
+// Two-page fixture with the SAME secret on both pages (page-scope test)
+async function buildTwoPageFixture(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create()
+  const font = await doc.embedFont(StandardFonts.Helvetica)
+  const page1 = doc.addPage([612, 792])
+  page1.drawText(`Page one secret: ${SSN}`, { x: 72, y: 700, size: 14, font })
+  const page2 = doc.addPage([612, 792])
+  page2.drawText(`Page two secret: ${SSN}`, { x: 72, y: 700, size: 14, font })
+  return doc.save()
+}
+
 function collectIo() {
   const out: string[] = []
   const err: string[] = []
@@ -112,5 +123,42 @@ describe('cli redact', () => {
     const code = await runCli(['redact', inPath, '--find', SSN, '--mode', 'invisible'], io)
     expect(code).toBe(EXIT_USAGE)
     expect(err.join('\n')).toContain('--mode')
+  })
+
+  it('exits 2 with clear message when --box page is 0 (below 1-based minimum)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pdfx-redact-'))
+    const inPath = join(dir, 'in.pdf')
+    await writeFile(inPath, await buildSsnFixture())
+    const { io, err } = collectIo()
+    const code = await runCli(['redact', inPath, '--box', '0:60,648,250,28'], io)
+    expect(code).toBe(EXIT_USAGE)
+    expect(err.join('\n')).toMatch(/1-based/)
+  })
+
+  it('exits 2 when --pages is given without --find or --regex', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pdfx-redact-'))
+    const inPath = join(dir, 'in.pdf')
+    await writeFile(inPath, await buildSsnFixture())
+    const { io, err } = collectIo()
+    const code = await runCli(['redact', inPath, '--box', '1:60,648,250,28', '--pages', '1'], io)
+    expect(code).toBe(EXIT_USAGE)
+    expect(err.join('\n')).toContain('--pages only applies to --find/--regex')
+  })
+
+  it('--pages scopes --find to the specified page only (security assertion)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'pdfx-redact-'))
+    const inPath = join(dir, 'in.pdf')
+    const outPath = join(dir, 'out.pdf')
+    await writeFile(inPath, await buildTwoPageFixture())
+    const { io } = collectIo()
+    // Only redact page 1 (1-based); page 2 must retain the SSN
+    const code = await runCli(['redact', inPath, '--find', SSN, '--pages', '1', '-o', outPath], io)
+    expect(code).toBe(EXIT_OK)
+    const pages = await extractText(new Uint8Array(await readFile(outPath)), {})
+    expect(pages).toHaveLength(2)
+    // Page 1: secret must be gone
+    expect(pages[0].text).not.toContain(SSN)
+    // Page 2: secret must still be present
+    expect(pages[1].text).toContain(SSN)
   })
 })
