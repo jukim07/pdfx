@@ -163,17 +163,22 @@ function roundMatrix(m: Matrix6, digits = 1): string {
   return m.map((v) => Math.round(v * f) / f).join(',')
 }
 
-// Candidate signature for the text arm: `text|<content>|<rounded CTM>`.
-// The `text|` prefix lets stripWatermark (Task 3) dispatch by kind — the
-// xobject arm (Task 2b) uses an `xobj|` prefix. A plain string signature is
-// sufficient; cryptographic strength is not needed here.
-function sigHash(text: string, ctm: Matrix6): string {
-  return `text|${text}|${roundMatrix(ctm)}`
+// Candidate signature for the text arm: `text|<content>|<rounded Tm>`.
+// We discriminate by the text matrix (Tm op / OPS.setTextMatrix) rather than
+// the graphics CTM (cm ops / OPS.transform). pdf-lib positions text via
+// setTextMatrix, not transform; the CTM for every text hit is identity.
+// Two "DRAFT" strings at different positions have different Tm values and thus
+// different signatures — body text at x:50,y:700 will not collide with a
+// watermark at x:306,y:396.
+// The `text|` prefix lets stripWatermark dispatch by kind; xobject arm uses `xobj|`.
+function sigHash(text: string, tm: Matrix6): string {
+  return `text|${text}|${roundMatrix(tm)}`
 }
 
 interface TextHit {
   text: string
-  ctm: Matrix6
+  ctm: Matrix6   // graphics CTM (cm ops inside q…Q)
+  tm: Matrix6    // text matrix from Tm op — the actual per-text-object position
   x: number
   y: number
   page: number
@@ -192,6 +197,9 @@ async function collectTextHits(bytes: Uint8Array): Promise<{ hits: TextHit[]; nu
     const { fnArray, argsArray } = await page.getOperatorList()
     const ctmStack: Matrix6[] = [identityMatrix()]
     const top = (): Matrix6 => ctmStack[ctmStack.length - 1]
+    // Text matrix: set by OPS.setTextMatrix (Tm op). pdf-lib emits Tm to
+    // position each text object; this is NOT the same as OPS.transform (cm).
+    let currentTm: Matrix6 = identityMatrix()
 
     for (let j = 0; j < fnArray.length; j++) {
       const fn = fnArray[j]
@@ -207,6 +215,12 @@ async function collectTextHits(bytes: Uint8Array): Promise<{ hits: TextHit[]; nu
         ctmStack[ctmStack.length - 1] = multiplyMatrix(top(), [
           m[0], m[1], m[2], m[3], m[4], m[5]
         ])
+      } else if (fn === OPS.setTextMatrix) {
+        // args[0] is an object with numeric keys 0–5 (a,b,c,d,e,f of the Tm matrix).
+        // Verified by probing a pdf-lib fixture: drawText with rotate/x/y emits
+        // setTextMatrix, not transform; this op carries the actual text position.
+        const m = args[0] as Record<number, number>
+        currentTm = [m[0], m[1], m[2], m[3], m[4], m[5]] as Matrix6
       } else if (fn === OPS.showText || fn === OPS.showSpacedText) {
         // args[0] is an array of glyph/string items; extract raw text
         const glyphs = args[0] as Array<{ unicode?: string } | number>
@@ -216,7 +230,8 @@ async function collectTextHits(bytes: Uint8Array): Promise<{ hits: TextHit[]; nu
           .join('')
         if (text.trim().length === 0) continue
         const ctm = top()
-        hits.push({ text: text.trim(), ctm, x: ctm[4], y: ctm[5], page: pageNum - 1 })
+        // Use currentTm (text matrix) for position; ctm (graphics CTM) is kept for context.
+        hits.push({ text: text.trim(), ctm, tm: currentTm, x: currentTm[4], y: currentTm[5], page: pageNum - 1 })
       }
     }
   }
@@ -233,7 +248,7 @@ async function findTextCandidates(bytes: Uint8Array): Promise<Candidate[]> {
   // Group hits by signature
   const groups = new Map<string, TextHit[]>()
   for (const hit of hits) {
-    const sig = sigHash(hit.text, hit.ctm)
+    const sig = sigHash(hit.text, hit.tm)
     const existing = groups.get(sig) ?? []
     existing.push(hit)
     groups.set(sig, existing)
@@ -478,10 +493,8 @@ function textToHex(text: string): string {
 async function stripTextWatermark(bytes: Uint8Array, candidateId: string): Promise<Uint8Array> {
   // Step 1: identify per-page regions matching candidateId via pdfjs getOperatorList
   const { hits } = await collectTextHits(bytes)
-  const matchingHits = hits.filter((h) => sigHash(h.text, h.ctm) === candidateId)
+  const matchingHits = hits.filter((h) => sigHash(h.text, h.tm) === candidateId)
   if (matchingHits.length === 0) return bytes
-
-  const matchingTexts = new Set(matchingHits.map((h) => h.text))
 
   // Step 2: load with pdf-lib for raw stream manipulation
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true })
@@ -495,41 +508,48 @@ async function stripTextWatermark(bytes: Uint8Array, candidateId: string): Promi
       const decoded = decodeStreamText(stream)
       let streamText = decoded.text
 
-      for (const text of matchingTexts) {
-        const hexText = textToHex(text)
-        // pdf-lib drawText emits hex-string show ops: `<HEX> Tj`
-        // preceded on the same or prior line by a `Tm` (text matrix).
-        // Remove: the Tm line + optional whitespace + the <HEX> Tj line.
-        // Also handle the parenthesis form `(text) Tj` and TJ variants.
+      // Remove per-hit, anchored by the concrete Tm matrix.
+      // Each hit carries the Tm sextuple from OPS.setTextMatrix; we build a
+      // pattern that matches exactly that Tm line + hex/paren show op.
+      // Body text with the same string but a different Tm position is NOT removed.
+      //
+      // q…Q fallback patterns (text-only, no Tm anchor) have been intentionally
+      // removed: they could silently destroy body text equal to the watermark
+      // string. An unsafe fallback is worse than none; the re-detection gate
+      // reports any leftover watermark instances.
+      for (const hit of pageHits) {
+        const hexText = textToHex(hit.text)
+
+        // Escape each Tm value to a regex-safe float literal.
+        // We use the pdfjs-decoded value directly (not roundMatrix-rounded) so
+        // the match is as precise as the stream itself.
+        const escapeTmVal = (v: number): string => {
+          // Escape the decimal point; the stream value may have many digits but
+          // we match it as a verbatim prefix up to the full precision pdfjs gave us.
+          return String(v).replace(/\./g, '\\.').replace(/-/, '-?')
+        }
+        // Strategy: anchor on the translated values (e5, e6 — x,y position) which
+        // are always integers or simple decimals and unique between watermark and body.
+        // For maximum safety we match all 6 values with lenient float tokens but
+        // anchor the whole Tm line (6 numbers + Tm keyword) so only that specific
+        // text-object is targeted.
+        const tmNum = `[-\\d.e]+`
+        const tmPat = `${tmNum}\\s+${tmNum}\\s+${tmNum}\\s+${tmNum}\\s+${escapeTmVal(hit.tm[4])}\\s+${escapeTmVal(hit.tm[5])}\\s+Tm`
+
+        // pdf-lib emits: `<a b c d e f Tm>\n<HEXTEXT> Tj\nT*`
         const hexTjPattern = new RegExp(
-          // optional preceding Tm instruction (numbers + Tm) on its own line
-          `(?:[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +Tm[ \\t]*\\n)?` +
-          // hex show: <HEXTEXT> Tj  (case-insensitive hex digits)
-          `<${hexText}>[ \\t]*Tj[ \\t]*\\n?`,
+          `${tmPat}[ \\t]*\\n<${hexText}>[ \\t]*Tj[ \\t]*\\n?`,
           'gi'
         )
         streamText = streamText.replace(hexTjPattern, '')
 
-        // Parenthesis form: `(text) Tj` — escape PDF special chars
-        const escaped = text.replace(/[\\()]/g, '\\$&')
+        // Parenthesis form: `(text) Tj` — anchored to same Tm
+        const escaped = hit.text.replace(/[\\()]/g, '\\$&')
         const parenTjPattern = new RegExp(
-          `(?:[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +Tm[ \\t]*\\n)?` +
-          `\\(${escaped}\\)[ \\t]*Tj[ \\t]*\\n?`,
+          `${tmPat}[ \\t]*\\n\\(${escaped}\\)[ \\t]*Tj[ \\t]*\\n?`,
           'g'
         )
         streamText = streamText.replace(parenTjPattern, '')
-
-        // q...Q blocks wrapping the watermark (some generators do use q/Q)
-        const qBlockHexPattern = new RegExp(
-          `q[^]*?<${hexText}>[^]*?Tj[^]*?Q[ \\t]*\\n?`,
-          'gi'
-        )
-        streamText = streamText.replace(qBlockHexPattern, '')
-        const qBlockParenPattern = new RegExp(
-          `q[^]*?\\(${escaped}\\)[^]*?Tj[^]*?Q[ \\t]*\\n?`,
-          'g'
-        )
-        streamText = streamText.replace(qBlockParenPattern, '')
       }
 
       if (streamText !== decoded.text) {

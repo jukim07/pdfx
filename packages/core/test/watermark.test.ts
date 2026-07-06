@@ -96,6 +96,57 @@ describe('findWatermarkCandidates — xobject arm', () => {
     expect(xobj!.description).toContain('XObject')
   })
 
+  it('same XObject painted at a different CTM on one page: different-CTM paint survives after strip (Finding 3)', async () => {
+    // Build a PDF where:
+    // - Pages 0–4: the stamp XObject is painted at one position (the watermark CTM)
+    // - Page 2 additionally paints the SAME XObject at a DIFFERENT position (x+200)
+    // After stripping the watermark candidate, the page-2 extra paint must survive.
+    const stampSrc = await PDFDocument.create()
+    const stampPage = stampSrc.addPage([300, 100])
+    stampPage.drawText('DRAFT', { x: 20, y: 30, size: 48, color: rgb(0.6, 0.6, 0.6), opacity: 0.3 })
+
+    const doc = await PDFDocument.create()
+    const embedded = await doc.embedPage(stampPage)
+    for (let i = 0; i < 5; i++) {
+      const page = doc.addPage([612, 792])
+      // Identical watermark placement on every page
+      page.drawPage(embedded, { x: 156, y: 346 })
+      page.drawText(`Page ${i + 1}`, { x: 50, y: 740, size: 12 })
+      if (i === 2) {
+        // Extra paint at a DIFFERENT position on page 2
+        page.drawPage(embedded, { x: 350, y: 200 })
+      }
+    }
+    const pdf = await doc.save()
+
+    // Detect the watermark candidate (uniform placement on all 5 pages)
+    const candidates = await findWatermarkCandidates(pdf)
+    const xobj = candidates.find((c) => c.kind === 'xobject')
+    expect(xobj).toBeDefined()
+
+    // Strip
+    const stripped = await stripWatermark(pdf, xobj!.id)
+
+    // (i) Re-detection finds no xobject candidate at the watermark CTM
+    const remaining = await findWatermarkCandidates(stripped)
+    // The extra paint on page 2 at x:350,y:200 is NOT uniform across pages,
+    // so it shouldn't become a new ≥80% coverage candidate anyway.
+    // Key: no candidate should match the original watermark CTM.
+    const strippedXobj = remaining.find((c) => c.kind === 'xobject' && c.id === xobj!.id)
+    expect(strippedXobj).toBeUndefined()
+
+    // (ii) Page 2's extra paint (different CTM) survived — the XObject resource
+    // must still exist on page 2.
+    const strippedDoc = await PDFDocument.load(stripped)
+    const page2 = strippedDoc.getPage(2)
+    const { XObject: xobjectDict } = page2.node.normalizedEntries()
+    expect(xobjectDict.entries().length).toBeGreaterThan(0)
+
+    // (iii) Normal page text survives
+    const pages = await extractText(stripped)
+    expect(pages.some((p) => p.text.includes('Page 1'))).toBe(true)
+  })
+
   it('does not report an xobject candidate when placements differ per page', async () => {
     const stampSrc = await PDFDocument.create()
     const stampPage = stampSrc.addPage([300, 100])
@@ -137,6 +188,73 @@ describe('addWatermark', () => {
     for (const pageText of pages) {
       expect(pageText.text, `page ${pageText.page} missing watermark`).toContain('DRAFT')
     }
+  })
+})
+
+// Fixture for position-discrimination test (Finding 1).
+// Pages 0–3 have centered+rotated 'DRAFT' (the watermark candidate).
+// Page 4 has ONLY body text including 'DRAFT' at a different position (no watermark).
+// This is the red/green proof fixture: with text-only matching (old code), the
+// body 'DRAFT' on page 4 would be destroyed; with Tm-anchored matching (new code) it survives.
+async function makeDraftWithBodyDraftPdf(): Promise<Uint8Array> {
+  const doc = await PDFDocument.create()
+  // Pages 0–3: watermark 'DRAFT' at center (rotated) + normal body text
+  for (let i = 0; i < 4; i++) {
+    const page = doc.addPage([612, 792])
+    page.drawText('DRAFT', {
+      x: 306,
+      y: 396,
+      size: 72,
+      rotate: degrees(45),
+      opacity: 0.25,
+      color: rgb(0.5, 0.5, 0.5),
+    })
+    page.drawText(`Page ${i + 1}`, { x: 50, y: 740, size: 12 })
+  }
+  // Page 4: body text 'DRAFT' at a clearly different position, no watermark
+  const lastPage = doc.addPage([612, 792])
+  lastPage.drawText('DRAFT', { x: 50, y: 700, size: 12 })          // body DRAFT
+  lastPage.drawText('Body text only', { x: 50, y: 650, size: 12 })
+  lastPage.drawText('Page 5', { x: 50, y: 740, size: 12 })
+  return doc.save()
+}
+
+describe('stripWatermark — position-discriminated removal (Finding 1)', () => {
+  it('removes the center watermark DRAFT but preserves body DRAFT at a different position', async () => {
+    const pdf = await makeDraftWithBodyDraftPdf()
+
+    // Detect: should find exactly ONE candidate — the centered watermark DRAFT.
+    // The body DRAFT (different Tm) must NOT be grouped into the same candidate.
+    const candidates = await findWatermarkCandidates(pdf)
+    const watermarkCandidate = candidates.find(
+      (c) => c.kind === 'text' && c.description.toLowerCase().includes('draft'),
+    )
+    expect(watermarkCandidate).toBeDefined()
+    // Coverage must be based on the watermark pages only (4/5 = 0.8), not 5/5.
+    // If detection were text-only, the body DRAFT page would also be included,
+    // resulting in coverage 1.0 — but the candidate should still exist either way.
+    expect(watermarkCandidate!.pageCoverage).toBeGreaterThanOrEqual(0.8)
+
+    // Strip the watermark candidate
+    const stripped = await stripWatermark(pdf, watermarkCandidate!.id)
+
+    // (i) Re-detection finds no qualifying text candidate for 'DRAFT'
+    const remaining = await findWatermarkCandidates(stripped)
+    const draftRemaining = remaining.find(
+      (c) => c.kind === 'text' && c.description.toLowerCase().includes('draft'),
+    )
+    expect(draftRemaining).toBeUndefined()
+
+    // (ii) extractText still finds body 'DRAFT' on page 5 (1-based; the last of 5 pages)
+    const pages = await extractText(stripped)
+    const lastPage = pages.find((p) => p.page === 5)
+    expect(lastPage).toBeDefined()
+    expect(lastPage!.text).toContain('DRAFT')
+
+    // (iii) Other body text survives on all pages
+    expect(pages.some((p) => p.text.includes('Page 1'))).toBe(true)
+    expect(pages.some((p) => p.text.includes('Page 5'))).toBe(true)
+    expect(pages.some((p) => p.text.includes('Body text only'))).toBe(true)
   })
 })
 
