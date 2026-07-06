@@ -8,6 +8,7 @@ import { createWindow, getMainWindow, getRendererReady, sendOpenPaths } from './
 import { buildMenu } from './menu'
 import { registerIpc } from './register-ipc'
 import { registerOcrProtocol, registerOcrSchemePrivileged } from './ocr-assets'
+import { testModeEnabled } from './test-mode'
 
 app.setName('PDFx')
 
@@ -43,6 +44,10 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     electronApp.setAppUserModelId('com.pdfx.app')
+
+    // Accessory activation policy: no dock icon, and macOS never activates the
+    // app over whatever the user is working in while e2e runs.
+    if (testModeEnabled() && process.platform === 'darwin') app.dock?.hide()
 
     registerOcrProtocol()
 

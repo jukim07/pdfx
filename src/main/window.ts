@@ -3,6 +3,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { GLASS_CONFIG, FALLBACK_BG, applyNativeGlass } from './native/glass'
 import { readFiles } from './file-intake'
+import { testModeEnabled } from './test-mode'
 
 let mainWindow: BrowserWindow | null = null
 let rendererReady = false
@@ -47,11 +48,18 @@ export function createWindow(): void {
         }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: true
+      sandbox: true,
+      // E2E drives the window over CDP, which needs no OS focus; without this,
+      // Chromium throttles timers/paint whenever the un-focused window is occluded.
+      backgroundThrottling: !testModeEnabled()
     }
   })
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  // showInactive keeps e2e runs from stealing focus from whatever the user is
+  // doing; CDP input and screenshots work without the window ever becoming key.
+  mainWindow.on('ready-to-show', () =>
+    testModeEnabled() ? mainWindow?.showInactive() : mainWindow?.show()
+  )
   applyNativeGlass(mainWindow)
   mainWindow.on('closed', () => {
     mainWindow = null
