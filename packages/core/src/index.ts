@@ -16,3 +16,10 @@ export { writeStampAnnots } from './annots/stamp.js'
 export { redactRegions, redactText } from './ops/redact.js'
 export { regionsFromQuads, StreamSurgeryError } from './ops/redact-model.js'
 export type { RedactRegion, RedactMode, RedactOptions } from './ops/redact-model.js'
+export {
+  addWatermark,
+  findWatermarkCandidates,
+  stripWatermark,
+  rebuildLegible
+} from './ops/watermark.js'
+export type { WatermarkOpts, Candidate, LegibleOpts } from './ops/watermark.js'
