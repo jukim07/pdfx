@@ -24,6 +24,15 @@ export default defineConfig({
         'tesseract.js': 'tesseract.js/dist/tesseract.esm.min.js'
       }
     },
+    build: {
+      rollupOptions: {
+        // The core barrel reaches @napi-rs/canvas (a native addon) through the
+        // redact engine's lazy imports. The renderer never executes those paths
+        // (redaction runs in the main process over IPC), but rollup still tries
+        // to bundle the .node binary unless the module is externalized.
+        external: ['@napi-rs/canvas']
+      }
+    },
     worker: {
       format: 'es'
     },
