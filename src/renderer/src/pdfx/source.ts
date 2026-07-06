@@ -1,12 +1,8 @@
 import { getDocument } from 'pdfjs-dist'
-import { cropPages, findConverter, partitionPages, pullPages, readManifest, rotatePages, stripExtension } from '@pdfx/core'
-import type { ExportPage, PdfxManifestDocumentSource } from '@pdfx/core'
+import { PDFDocument, degrees } from 'pdf-lib'
+import { findConverter, partitionPages, readManifest, stripExtension } from '@pdfx/core'
+import type { ExportPage, PageSize, PdfxManifestDocumentSource } from '@pdfx/core'
 import type { DocEntry, PageEntry, PdfSource } from '../types'
-
-interface PageSize {
-  width: number
-  height: number
-}
 
 export interface LoadedSource {
   source: PdfSource
@@ -68,11 +64,19 @@ export async function toExportPage(page: PageEntry): Promise<ExportPage> {
   if (!page.rotation && !page.cropBox) {
     return { sourceKey: page.source.id, bytes: page.source.bytes, pageIndex: page.pageIndex }
   }
-  // Bake edits into a single-page PDF so buildPdf/buildPdfx copy the edited page.
-  let bytes = await pullPages(page.source.bytes, String(page.pageIndex + 1))
-  if (page.rotation) bytes = await rotatePages(bytes, page.rotation)
-  if (page.cropBox) bytes = await cropPages(bytes, page.cropBox)
-  return { sourceKey: page.id, bytes, pageIndex: 0 }
+  // Bake edits (rotation, crop) in a single load/save cycle instead of three
+  // chained pullPages→rotatePages→cropPages each re-parsing the same bytes.
+  const src = await PDFDocument.load(page.source.bytes, { ignoreEncryption: true })
+  const out = await PDFDocument.create()
+  const [copied] = await out.copyPages(src, [page.pageIndex])
+  out.addPage(copied)
+  const outPage = out.getPage(0)
+  if (page.rotation) outPage.setRotation(degrees(((page.rotation % 360) + 360) % 360))
+  if (page.cropBox) {
+    const { x, y, width, height } = page.cropBox
+    outPage.setCropBox(x, y, width, height)
+  }
+  return { sourceKey: page.id, bytes: await out.save(), pageIndex: 0 }
 }
 
 export async function loadIncomingPages(

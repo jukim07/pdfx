@@ -1,7 +1,5 @@
-export interface PageSize {
-  width: number
-  height: number
-}
+export type { PageSize } from '@pdfx/core'
+import type { PageSize } from '@pdfx/core'
 
 export const PT_TO_PX = 96 / 72
 export const PT_TO_MM = 25.4 / 72
