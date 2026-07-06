@@ -11,6 +11,14 @@ export function isWithinSnapThreshold(currentK: number, fitK: number): boolean {
   return Math.abs(currentK - fitK) / fitK <= SNAP_THRESHOLD
 }
 
+/**
+ * Returned by snapToFit so the caller can abort the animation.
+ * Calling cancel() mid-flight stops the rAF loop without firing onComplete.
+ */
+export interface SnapHandle {
+  cancel: () => void
+}
+
 export function snapToFit(
   vp: HTMLDivElement,
   zoom: ZoomBehavior<HTMLDivElement, unknown>,
@@ -18,18 +26,21 @@ export function snapToFit(
   fitX: number,
   fitY: number,
   onComplete?: () => void
-): void {
+): SnapHandle {
   const current = zoomTransform(vp)
   if (!isWithinSnapThreshold(current.k, fitScale)) {
     onComplete?.()
-    return
+    return { cancel: () => {} }
   }
 
   const sel = select(vp)
   const start = performance.now()
   const from = { k: current.k, x: current.x, y: current.y }
+  let rafId = 0
+  let cancelled = false
 
   const tick = (): void => {
+    if (cancelled) return
     const elapsed = performance.now() - start
     const progress = Math.min(elapsed / SNAP_DURATION_MS, 1)
     // ease-out cubic
@@ -39,12 +50,19 @@ export function snapToFit(
       .scale(from.k + (fitScale - from.k) * t)
     zoom.transform(sel, interpolated)
     if (progress < 1) {
-      requestAnimationFrame(tick)
+      rafId = requestAnimationFrame(tick)
     } else {
       onComplete?.()
     }
   }
-  requestAnimationFrame(tick)
+  rafId = requestAnimationFrame(tick)
+
+  return {
+    cancel: () => {
+      cancelled = true
+      cancelAnimationFrame(rafId)
+    }
+  }
 }
 
 interface ZoomHandlerRefs {
@@ -56,10 +74,16 @@ interface ZoomHandlerRefs {
   lastTick: { current: number }
   onScaleRef: { current: ((scale: number) => void) | undefined }
   onSettleRef: { current: (() => void) | undefined }
-  onSnapRef: { current: (() => { k: number; x: number; y: number } | null) | undefined }
+  onSnapRef: { current: (() => { k: number; x: number; y: number } | null) }
 }
 
-export function createZoomBehavior(refs: ZoomHandlerRefs): ZoomBehavior<HTMLDivElement, unknown> {
+export interface ZoomBehaviorResult {
+  zoom: ZoomBehavior<HTMLDivElement, unknown>
+  /** Cancel any in-flight snap animation. Safe to call when no snap is running. */
+  cancelSnap: () => void
+}
+
+export function createZoomBehavior(refs: ZoomHandlerRefs): ZoomBehaviorResult {
   const {
     vp,
     worldRef,
@@ -75,6 +99,9 @@ export function createZoomBehavior(refs: ZoomHandlerRefs): ZoomBehavior<HTMLDivE
   // (which is also reset by each programmatic zoom.transform call during snap)
   // does not re-enter snapToFit.
   let snapRunning = false
+  // Handle returned by snapToFit; used to cancel a running snap when a new
+  // user gesture arrives or the behavior is torn down.
+  let snapHandle: SnapHandle | null = null
 
   const zoom = d3zoom<HTMLDivElement, unknown>()
     .scaleExtent([MIN_SCALE, MAX_SCALE])
@@ -88,6 +115,15 @@ export function createZoomBehavior(refs: ZoomHandlerRefs): ZoomBehavior<HTMLDivE
     .on('start', () => vp.classList.add('panning'))
     .on('end', () => vp.classList.remove('panning'))
     .on('zoom', (event) => {
+      // Cancel any running snap immediately when a real user gesture arrives.
+      // Programmatic frames (sourceEvent === null, including the snap's own
+      // rAF ticks) must NOT cancel — the snap's own frames are programmatic
+      // and self-cancelling would abort the animation mid-flight.
+      if (event.sourceEvent !== null && snapRunning) {
+        snapHandle?.cancel()
+        snapHandle = null
+        snapRunning = false
+      }
       if (event.sourceEvent) userMovedRef.current = true
       const t = event.transform
       const world = worldRef.current
@@ -119,12 +155,21 @@ export function createZoomBehavior(refs: ZoomHandlerRefs): ZoomBehavior<HTMLDivE
           const fitParams = onSnapRef.current?.()
           if (fitParams) {
             snapRunning = true
-            snapToFit(vp, zoom, fitParams.k, fitParams.x, fitParams.y, () => {
+            snapHandle = snapToFit(vp, zoom, fitParams.k, fitParams.x, fitParams.y, () => {
               snapRunning = false
+              snapHandle = null
             })
           }
         }
       }, 200)
     })
-  return zoom
+  const cancelSnap = (): void => {
+    if (snapHandle) {
+      snapHandle.cancel()
+      snapHandle = null
+      snapRunning = false
+    }
+  }
+
+  return { zoom, cancelSnap }
 }

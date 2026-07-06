@@ -50,7 +50,7 @@ export function useZoomBehavior({
   onScaleRef.current = onScaleChange
   const onSettleRef = useRef(onSettle)
   onSettleRef.current = onSettle
-  const onSnapRef = useRef<(() => { k: number; x: number; y: number } | null) | undefined>(
+  const onSnapRef = useRef<(() => { k: number; x: number; y: number } | null)>(
     () => {
       if (!viewportRef.current) return null
       const t = computeFitTransform(viewportRef.current, dims.current!)
@@ -65,7 +65,7 @@ export function useZoomBehavior({
     const vp = viewportRef.current
     if (!vp) return
 
-    const zoomBehavior = createZoomBehavior({
+    const { zoom: zoomBehavior, cancelSnap } = createZoomBehavior({
       vp,
       worldRef,
       overlayRef,
@@ -108,6 +108,7 @@ export function useZoomBehavior({
       resize.disconnect()
       sel.on('.zoom', null)
       if (idleTimer.current) clearTimeout(idleTimer.current)
+      cancelSnap()
     }
   }, [])
 
