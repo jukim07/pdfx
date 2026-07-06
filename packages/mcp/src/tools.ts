@@ -55,6 +55,7 @@ async function pageCountOf(bytes: Uint8Array): Promise<number> {
 }
 
 async function writeOut(outputPath: string, bytes: Uint8Array): Promise<WriteResult> {
+  await mkdir(path.dirname(outputPath), { recursive: true })
   await writeFile(outputPath, bytes)
   return { outputPath, pageCount: await pageCountOf(bytes) }
 }
@@ -92,6 +93,8 @@ export async function toolExtract(args: {
   return { outDir: args.outDir, manifest }
 }
 
+const ILLEGAL_FILENAME_CHARS = /[\\/:*?"<>|]/g
+
 export async function toolSplit(args: {
   inputPath: string
   outDir: string
@@ -100,10 +103,15 @@ export async function toolSplit(args: {
   await mkdir(args.outDir, { recursive: true })
   const parts = await splitPdfx(bytes)
   const outputs: { name: string; path: string }[] = []
+  const used = new Set<string>()
   for (const part of parts) {
-    const outPath = path.join(args.outDir, `${part.name}.pdf`)
+    const safe = part.name.replace(ILLEGAL_FILENAME_CHARS, '-').trim() || 'Untitled'
+    let filename = `${safe}.pdf`
+    for (let n = 2; used.has(filename); n++) filename = `${safe} (${n}).pdf`
+    used.add(filename)
+    const outPath = path.join(args.outDir, filename)
     await writeFile(outPath, part.pdf)
-    outputs.push({ name: part.name, path: outPath })
+    outputs.push({ name: safe, path: outPath })
   }
   return { outputs }
 }
