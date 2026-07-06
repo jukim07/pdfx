@@ -7,7 +7,8 @@ import { pctRectToPdf } from './geometry'
 interface AnnotOverlayProps {
   page: PageEntry
   tool: AnnotTool
-  onCommit: (a: Annot) => void
+  /** Called with the finished annot and the id of the source PDF the page belongs to. */
+  onCommit: (a: Annot, sourceId: string) => void
 }
 
 type DragState = { startX: number; startY: number; curX: number; curY: number }
@@ -76,6 +77,7 @@ export function AnnotOverlay({ page, tool, onCommit }: AnnotOverlayProps): React
 
     const pdfRect = pctRectToPdf({ leftPct, topPct, wPct, hPct }, page.width, page.height)
 
+    const sourceId = page.source.id
     if (tool === 'highlight' || tool === 'underline' || tool === 'strikeout') {
       const quad = rectToQuad(pdfRect)
       onCommit({
@@ -83,7 +85,7 @@ export function AnnotOverlay({ page, tool, onCommit }: AnnotOverlayProps): React
         page: page.pageIndex,
         quads: [quad],
         color: HIGHLIGHT_COLOR
-      })
+      }, sourceId)
     } else if (tool === 'note') {
       onCommit({
         type: 'note',
@@ -91,7 +93,7 @@ export function AnnotOverlay({ page, tool, onCommit }: AnnotOverlayProps): React
         rect: pdfRect,
         color: NOTE_COLOR,
         contents: ''
-      })
+      }, sourceId)
     } else if (tool === 'text') {
       onCommit({
         type: 'text',
@@ -100,7 +102,7 @@ export function AnnotOverlay({ page, tool, onCommit }: AnnotOverlayProps): React
         contents: '',
         fontSize: 12,
         color: { r: 0, g: 0, b: 0 }
-      })
+      }, sourceId)
     }
   }, [toFrac, page, tool, onCommit])
 

@@ -20,7 +20,7 @@ interface FullViewPageProps {
   resetView: () => void
   applyZoom: (nextZoom: (z: number) => number, focal?: { x: number; y: number }) => void
   annotTool?: AnnotTool
-  onAnnotCommit?: (a: Annot) => void
+  onAnnotCommit?: (a: Annot, sourceId: string) => void
 }
 
 export function FullViewPage(props: FullViewPageProps): React.JSX.Element {

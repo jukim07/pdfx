@@ -19,7 +19,7 @@ interface FullViewProps {
   onClose: () => void
   annotTool?: AnnotTool
   onAnnotTool?: (t: AnnotTool) => void
-  onAnnotCommit?: (a: Annot) => void
+  onAnnotCommit?: (a: Annot, sourceId: string) => void
   annotDraftCount?: number
   onSaveAnnots?: () => void
   busy?: boolean

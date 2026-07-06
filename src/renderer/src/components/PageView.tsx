@@ -23,8 +23,9 @@ interface PageViewProps {
   annotTool?: AnnotTool
   /** The PageEntry for this page — required when annotTool is set. */
   pageEntry?: PageEntry
-  /** Called when user finishes drawing an annotation on this page. */
-  onAnnotCommit?: (a: Annot) => void
+  /** Called when user finishes drawing an annotation on this page.
+   *  sourceId is the PdfSource.id of the page so callers can group drafts by source. */
+  onAnnotCommit?: (a: Annot, sourceId: string) => void
 }
 
 function PageViewImpl({

@@ -5,20 +5,37 @@ import type { Annot } from '@pdfx/core'
  * 'ink' is reserved for Phase 4b freehand; button exists but records nothing. */
 export type AnnotTool = 'none' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'text' | 'ink'
 
+/** Renderer-local draft record: pairs an annotation with the source PDF it belongs to.
+ * sourceId mirrors PdfSource.id so save can group drafts by source without
+ * touching the core Annot model (Annot.page stays source-relative pageIndex). */
+export interface DraftAnnot {
+  annot: Annot
+  sourceId: string
+}
+
 export interface UseAnnotToolResult {
   tool: AnnotTool
   setTool: (t: AnnotTool) => void
-  drafts: Annot[]
-  addDraft: (a: Annot) => void
-  clearDrafts: () => void
+  drafts: DraftAnnot[]
+  addDraft: (a: Annot, sourceId: string) => void
+  clearDraftsForSources: (sourceIds: Set<string>) => void
 }
 
 export function useAnnotTool(): UseAnnotToolResult {
   const [tool, setTool] = useState<AnnotTool>('none')
-  const [drafts, setDrafts] = useState<Annot[]>([])
+  const [drafts, setDrafts] = useState<DraftAnnot[]>([])
 
-  const addDraft = useCallback((a: Annot) => setDrafts((prev) => [...prev, a]), [])
-  const clearDrafts = useCallback(() => setDrafts([]), [])
+  const addDraft = useCallback(
+    (a: Annot, sourceId: string) => setDrafts((prev) => [...prev, { annot: a, sourceId }]),
+    []
+  )
 
-  return { tool, setTool, drafts, addDraft, clearDrafts }
+  // Only clear drafts for sources that were saved successfully; failed sources keep their drafts.
+  const clearDraftsForSources = useCallback(
+    (sourceIds: Set<string>) =>
+      setDrafts((prev) => prev.filter((d) => !sourceIds.has(d.sourceId))),
+    []
+  )
+
+  return { tool, setTool, drafts, addDraft, clearDraftsForSources }
 }

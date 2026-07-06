@@ -19,6 +19,7 @@ import { FindBar } from './components/FindBar'
 import { CropRangeDialog } from './components/CropRangeDialog'
 import type { CropRect } from './components/CropOverlay'
 import { useAnnotTool } from './annots/useAnnotTool'
+import { groupDraftsBySource } from './annots/groupDrafts'
 import type { Annot } from '@pdfx/core'
 import { loadSource } from './pdfx/source'
 
@@ -58,50 +59,70 @@ export default function App(): React.JSX.Element {
   )
   const annot = useAnnotTool()
 
-  const handleAnnotCommit = useCallback((a: Annot) => {
-    annot.addDraft(a)
+  const handleAnnotCommit = useCallback((a: Annot, sourceId: string) => {
+    annot.addDraft(a, sourceId)
   }, [annot.addDraft])
 
-  // Save annotation drafts into the source PDF bytes, then reload the in-memory
-  // PdfSource so the next full-view open renders the persisted annotation.
+  // Save annotation drafts into each affected source PDF, then reload the in-memory
+  // PdfSource objects so pdfjs-dist renders persisted annotations on next full-view open.
+  // A doc may span pages from multiple sources (merge/paste); each source is saved
+  // independently so a failure in one never silently drops drafts for others.
   const handleSaveAnnots = useCallback(async () => {
     if (annot.drafts.length === 0 || !fullViewState.fullView) return
     const docId = fullViewState.fullView.docId
     const doc = collection.docsRef.current.find((d) => d.id === docId)
     if (!doc || doc.pages.length === 0) return
-    const srcId = doc.pages[0].source.id
-    const srcBytes = doc.pages[0].source.bytes
+
+    // Build a lookup from sourceId → PdfSource using this doc's pages.
+    const sourceById = new Map(doc.pages.map((p) => [p.source.id, p.source]))
+
+    // Group drafts by the source they belong to.
+    const draftsBySource = groupDraftsBySource(annot.drafts, sourceById)
+
     setBusy(true)
-    try {
-      const newBytes = await window.api.writeAnnots(srcBytes, annot.drafts)
-      // Reload the PDF document proxy so pdfjs-dist can render the new annotations.
-      const { source: newSource, sizes } = await loadSource(newBytes)
-      collection.setDocs((prev) =>
-        prev.map((d) => {
-          if (d.id !== docId) return d
-          return {
-            ...d,
-            pages: d.pages.map((p) => {
-              if (p.source.id !== srcId) return p
-              return {
-                ...p,
-                source: newSource,
-                width: sizes[p.pageIndex]?.width ?? p.width,
-                height: sizes[p.pageIndex]?.height ?? p.height
-              }
-            })
-          }
-        })
-      )
-      annot.clearDrafts()
-      flash(`Annotations saved`)
-    } catch (err) {
-      console.error('Save annotations failed', err)
-      flash('Failed to save annotations')
-    } finally {
-      setBusy(false)
+    const savedSourceIds = new Set<string>()
+    const errors: string[] = []
+
+    for (const [srcId, { source, annots }] of draftsBySource) {
+      try {
+        const newBytes = await window.api.writeAnnots(source.bytes, annots)
+        const { source: newSource, sizes } = await loadSource(newBytes)
+        collection.setDocs((prev) =>
+          prev.map((d) => {
+            if (d.id !== docId) return d
+            return {
+              ...d,
+              pages: d.pages.map((p) => {
+                if (p.source.id !== srcId) return p
+                return {
+                  ...p,
+                  source: newSource,
+                  width: sizes[p.pageIndex]?.width ?? p.width,
+                  height: sizes[p.pageIndex]?.height ?? p.height
+                }
+              })
+            }
+          })
+        )
+        savedSourceIds.add(srcId)
+      } catch (err) {
+        console.error(`Save annotations failed for source ${srcId}`, err)
+        errors.push(srcId)
+      }
     }
-  }, [annot.drafts, annot.clearDrafts, fullViewState.fullView, collection.docsRef, collection.setDocs, setBusy, flash])
+
+    // Only clear drafts for sources that saved successfully; keep drafts for failed sources.
+    annot.clearDraftsForSources(savedSourceIds)
+    setBusy(false)
+
+    if (errors.length === 0) {
+      flash('Annotations saved')
+    } else if (savedSourceIds.size > 0) {
+      flash(`Annotations partially saved (${errors.length} source(s) failed)`)
+    } else {
+      flash('Failed to save annotations')
+    }
+  }, [annot.drafts, annot.clearDraftsForSources, fullViewState.fullView, collection.docsRef, collection.setDocs, setBusy, flash])
 
   const layout = useMemo(() => computeLayout(docs), [docs])
 
