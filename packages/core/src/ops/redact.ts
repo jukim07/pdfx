@@ -173,21 +173,17 @@ export async function redactRegions(
   let out = await doc.save()
   await assertNoSurvivors(out, regions) // fail closed — Known risks 1 & 2
 
-  // Cosmetic layer: draw black box ABOVE all content on second pass.
+  // Cosmetic layer: draw over the surgically-cleaned content on a second pass.
   const doc2 = await PDFDocument.load(out)
   const pages2 = doc2.getPages()
   for (const r of regions) {
     const page = pages2[r.page]
     if (opts.mode === 'blur') {
-      // Task 6 replaces with real blur; until then black box (text
-      // already removed above, so leak post-condition holds either way).
-      page.drawRectangle({
-        x: r.rect.x,
-        y: r.rect.y,
-        width: r.rect.w,
-        height: r.rect.h,
-        color: rgb(0, 0, 0),
-      })
+      const { width, height } = page.getSize()
+      const { blurredRegionPng } = await import('./blur.js')
+      const png = await blurredRegionPng(bytes, r, width, height, opts.dpi ?? 150)
+      const img = await doc2.embedPng(png)
+      page.drawImage(img, { x: r.rect.x, y: r.rect.y, width: r.rect.w, height: r.rect.h })
     } else {
       page.drawRectangle({
         x: r.rect.x,
