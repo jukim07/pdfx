@@ -36,6 +36,8 @@ test('footer crop applied to all pages persists as CropBox in the export', async
     // the mouseup fires; dispatching via dispatchEvent with a setTimeout(20ms)
     // between mousedown and mouseup allows React to flush the state update so
     // onMouseUp sees drag !== null and calls onCropFinished.
+    // TODO(phase-3): app bug, reproduced here under native input — CropOverlay onMouseUp reads stale 'drag' via its [drag] dep; fix is the functional-updater pattern (see onMouseMove).
+    // This synthetic-event path stays valid only while CropOverlay's handlers remain React props on the overlay div (no pointer capture / document listeners).
     const bb = (await overlay.boundingBox())!
     const x0 = bb.x + 1
     const y0 = bb.y + 1
