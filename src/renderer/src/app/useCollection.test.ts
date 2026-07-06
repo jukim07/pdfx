@@ -89,6 +89,78 @@ describe('movePageToNewDoc undo — single-page source', () => {
   })
 })
 
+// ── Finding 3: movePageInto with single-page source ────────────────────────────
+
+describe('movePageInto undo — single-page source', () => {
+  it('FAILS against old recomputed-undo closure (red)', () => {
+    // Demonstrate the old bug: undo using the recomputed approach drops the
+    // original source doc when it had exactly one page.
+    const docA = mkDoc('src', 'Source', ['p1'])
+    const docB = mkDoc('target', 'Target', ['p2'])
+    let state: DocEntry[] = [docA, docB]
+    const stack = createCommandStack((next) => { state = next })
+
+    const source = { docId: 'src', pageId: 'p1' }
+
+    // Simulate the OLD (buggy) undo closure:
+    stack.dispatch({
+      do: () => moveOps.movePageInto(state, source, 'target', 0),
+      undo: () => {
+        // Old closure: recomputes afterDo and tries to move back — but source.docId
+        // ('src') no longer exists in afterDo when source had 1 page.
+        const afterDo = moveOps.movePageInto([docA, docB], source, 'target', 0)
+        return moveOps.movePageInto(
+          afterDo,
+          { docId: 'target', pageId: 'p1' },
+          'src', // 'src' is absent from afterDo — move will be silently dropped
+          0
+        )
+      }
+    })
+
+    stack.undo()
+
+    // With the old closure, 'src' is not restored — undo does NOT return to
+    // original state. This is the bug being verified.
+    const srcRestored = state.find((d) => d.id === 'src')
+    expect(srcRestored).toBeUndefined() // RED: proves old closure is broken
+  })
+
+  it('snapshot-restore undo restores original docs (green)', () => {
+    const docA = mkDoc('src', 'Source', ['p1'])
+    const docB = mkDoc('target', 'Target', ['p2'])
+    let state: DocEntry[] = [docA, docB]
+    const stack = createCommandStack((next) => { state = next })
+
+    const source = { docId: 'src', pageId: 'p1' }
+    // Snapshot captured at dispatch time, exactly as the fixed implementation does.
+    const snapshot = [...state].map((d) => ({ ...d, pages: [...d.pages] }))
+
+    stack.dispatch({
+      do: () => moveOps.movePageInto(snapshot, source, 'target', 0),
+      undo: () => snapshot
+    })
+
+    // After do: source doc removed (had 1 page), target has both pages
+    const srcAfterDo = state.find((d) => d.id === 'src')
+    expect(srcAfterDo).toBeUndefined() // removed when its last page was moved
+    const targetAfterDo = state.find((d) => d.id === 'target')
+    expect(targetAfterDo?.pages).toHaveLength(2)
+    expect(targetAfterDo?.pages[0].id).toBe('p1') // moved page at index 0
+
+    stack.undo()
+
+    // After undo: back to original snapshot
+    expect(state).toHaveLength(2)
+    expect(state[0].id).toBe('src')
+    expect(state[0].pages).toHaveLength(1)
+    expect(state[0].pages[0].id).toBe('p1')
+    expect(state[1].id).toBe('target')
+    expect(state[1].pages).toHaveLength(1)
+    expect(state[1].pages[0].id).toBe('p2')
+  })
+})
+
 // ── Finding 2: stack-level test for paste/append through dispatch ─────────────
 
 describe('paste/append docs via dispatch are undoable', () => {

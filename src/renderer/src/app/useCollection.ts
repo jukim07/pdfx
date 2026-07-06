@@ -185,21 +185,10 @@ export function useCollection(flash: (message: string) => void) {
 
   const movePageInto = useCallback(
     (source: PageRef, targetDocId: string, index: number) => {
-      const current = docsRef.current
-      const srcDoc = current.find((d) => d.id === source.docId)
-      const originalIndex = srcDoc?.pages.findIndex((p) => p.id === source.pageId) ?? 0
+      const snapshot = docsRef.current
       dispatch({
-        do: () => moveOps.movePageInto(current, source, targetDocId, index),
-        undo: () => {
-          // Reverse: move page from targetDocId back to source.docId at originalIndex
-          const afterDo = moveOps.movePageInto(current, source, targetDocId, index)
-          return moveOps.movePageInto(
-            afterDo,
-            { docId: targetDocId, pageId: source.pageId },
-            source.docId,
-            originalIndex
-          )
-        }
+        do: () => moveOps.movePageInto(snapshot, source, targetDocId, index),
+        undo: () => snapshot
       })
       setSelected({ docId: targetDocId, pageId: source.pageId })
     },
