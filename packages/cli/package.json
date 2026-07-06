@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@pdfx/core": "0.1.0",
+    "chokidar": "4.0.3",
     "pdf-lib": "1.17.1"
   },
   "devDependencies": {

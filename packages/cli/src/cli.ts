@@ -8,6 +8,7 @@ import {
   parseManifest, stripExtension, type MergeInput, type PdfxManifest
 } from '@pdfx/core'
 import { extractArtifacts, extractAssets, type ExtractArtifactsOptions } from '@pdfx/core/extract'
+import { watchExtract } from './watch.js'
 
 export const EXIT_OK = 0
 export const EXIT_ERROR = 1
@@ -21,6 +22,7 @@ export interface CliIo {
 const USAGE = `Usage:
   pdfx info <file.pdf|file.pdfx> [--json]
   pdfx extract <file.pdf|file.pdfx> -o <outDir> [--format md,png] [--dpi 150] [--pages 1-3,5] [--lang eng] [--no-ocr] [--json]
+  pdfx extract --watch <dir> -o <outRoot>  (watch mode: NDJSON lines on stdout, .done markers next to source)
   pdfx split <file.pdfx> -o <outDir> [-f] [--json]
   pdfx merge <input[#sel]>... -o <out.pdf|out.pdfx> [--kind pdf|pdfx] [-f] [--json]
   pdfx pull <file> --pages <ranges> -o <out.pdf> [-f] [--json]
@@ -380,6 +382,7 @@ async function runExtract(rest: string[], io: CliIo): Promise<number> {
       allowPositionals: true,
       options: {
         out: { type: 'string', short: 'o' },
+        watch: { type: 'string' },
         format: { type: 'string' },
         dpi: { type: 'string' },
         pages: { type: 'string' },
@@ -393,6 +396,23 @@ async function runExtract(rest: string[], io: CliIo): Promise<number> {
     io.err(USAGE)
     return EXIT_USAGE
   }
+
+  // Watch mode: pdfx extract --watch <dir> -o <outRoot>
+  // Runs indefinitely; each processed file emits one NDJSON line on stdout.
+  if (parsed.values.watch !== undefined) {
+    const watchDir = parsed.values.watch
+    const outRoot = parsed.values.out
+    if (!outRoot) {
+      io.err('pdfx extract --watch requires -o <outRoot>')
+      io.err(USAGE)
+      return EXIT_USAGE
+    }
+    io.err(`Watching ${watchDir} → ${outRoot}`)
+    await watchExtract(watchDir, outRoot, (line) => process.stdout.write(line + '\n'))
+    // Watcher runs until SIGINT; process stays alive
+    await new Promise<never>(() => {})
+  }
+
   const file = parsed.positionals[0]
   const outDir = parsed.values.out
   if (!file || parsed.positionals.length > 1 || !outDir) {
