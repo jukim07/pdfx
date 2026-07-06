@@ -265,9 +265,194 @@ async function findTextCandidates(bytes: Uint8Array): Promise<Candidate[]> {
   return candidates
 }
 
+// ---------- Shared raw-content-stream helpers (also used by Task 3) ----------
+
+export function resolveContentStreams(doc: PDFDocument, page: PDFPage): PDFRawStream[] {
+  const contentsRef = page.node.get(PDFName.of('Contents'))
+  const streams: PDFRawStream[] = []
+  const visit = (ref: unknown): void => {
+    const resolved = doc.context.lookup(ref as Parameters<typeof doc.context.lookup>[0])
+    if (resolved instanceof PDFRawStream) {
+      streams.push(resolved)
+    } else if (resolved instanceof PDFArray) {
+      for (let j = 0; j < resolved.size(); j++) visit(resolved.get(j))
+    }
+  }
+  if (contentsRef) visit(contentsRef)
+  return streams
+}
+
+export function decodeStreamText(stream: PDFRawStream): { text: string; compressed: boolean } {
+  const filter = stream.dict.get(PDFName.of('Filter'))
+  if (filter && filter.toString().includes('FlateDecode')) {
+    return { text: inflateSync(Buffer.from(stream.contents)).toString('latin1'), compressed: true }
+  }
+  return { text: Buffer.from(stream.contents).toString('latin1'), compressed: false }
+}
+
+export function encodeStreamText(
+  stream: PDFRawStream,
+  text: string,
+  compressed: boolean,
+  doc: PDFDocument
+): void {
+  const newBytes = compressed ? deflateSync(Buffer.from(text, 'latin1')) : Buffer.from(text, 'latin1')
+  // <!-- unverified-api -->: PDFRawStream.contents is a Uint8Array property in pdf-lib
+  // internals but the setter is not public. If this assignment fails at runtime,
+  // create a fresh PDFRawStream and doc.context.assign(streamRef, newStream) instead.
+  ;(stream as unknown as { contents: Uint8Array }).contents = new Uint8Array(newBytes)
+  stream.dict.set(PDFName.of('Length'), doc.context.obj(newBytes.length))
+}
+
+// ---------- Minimal XObject-paint scanner (intentional, not a fallback) ----------
+// content-stream.ts IS present (Phase 4c) but its API (tokenizeContent/stripOps) targets
+// text-show operators for surgery. This scanner tracks q/Q/cm/Do for XObject paint detection,
+// which is a different operation. Keep both; do not merge or replace.
+
+export interface XObjectPaint {
+  name: string                    // resource name without the leading slash, e.g. 'X0'
+  ctm: Matrix6                    // CTM in effect at the Do op
+  nameStart: number               // char offset of the /Name token in the ORIGINAL stream text
+  doEnd: number                   // char offset just past the Do token
+  blockStart: number              // offset of the innermost enclosing 'q' (== nameStart if none)
+  blockEndAfterQ: number | null   // offset just past the matching 'Q'; null if not inside q…Q
+}
+
+export function scanXObjectPaints(streamText: string): XObjectPaint[] {
+  // Blank out string literals and hex strings PRESERVING LENGTH so token
+  // offsets map back to the original stream text (needed by Task 3 removal).
+  const cleaned = streamText
+    .replace(/\((?:\\.|[^\\)])*\)/g, (s) => ' '.repeat(s.length))
+    .replace(/<[0-9A-Fa-f\s]*>/g, (s) => ' '.repeat(s.length))
+
+  interface Frame { matrix: Matrix6; qStart: number; paintIdx: number[] }
+  const frames: Frame[] = [{ matrix: identityMatrix(), qStart: -1, paintIdx: [] }]
+  const operands: { tok: string; start: number }[] = []
+  const paints: XObjectPaint[] = []
+
+  const re = /\S+/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(cleaned)) !== null) {
+    const tok = m[0]
+    const top = frames[frames.length - 1]
+    if (tok === 'q') {
+      frames.push({ matrix: [...top.matrix] as Matrix6, qStart: m.index, paintIdx: [] })
+      operands.length = 0
+    } else if (tok === 'Q') {
+      if (frames.length > 1) {
+        const closed = frames.pop()!
+        for (const idx of closed.paintIdx) {
+          paints[idx].blockStart = closed.qStart
+          paints[idx].blockEndAfterQ = m.index + 1
+        }
+      }
+      operands.length = 0
+    } else if (tok === 'cm') {
+      const nums = operands.slice(-6).map((o) => Number(o.tok))
+      if (nums.length === 6 && nums.every(Number.isFinite)) {
+        top.matrix = multiplyMatrix(top.matrix, nums as Matrix6)
+      }
+      operands.length = 0
+    } else if (tok === 'Do') {
+      const nameOperand = operands[operands.length - 1]
+      if (nameOperand && nameOperand.tok.startsWith('/')) {
+        const idx = paints.length
+        paints.push({
+          name: nameOperand.tok.slice(1),
+          ctm: [...top.matrix] as Matrix6,
+          nameStart: nameOperand.start,
+          doEnd: m.index + tok.length,
+          blockStart: nameOperand.start,   // provisional; overwritten on Q pop
+          blockEndAfterQ: null
+        })
+        if (frames.length > 1) top.paintIdx.push(idx)
+      }
+      operands.length = 0
+    } else if (tok.startsWith('/') || /^[-+.\d]/.test(tok)) {
+      operands.push({ tok, start: m.index })
+    } else {
+      // any other operator clears pending operands
+      operands.length = 0
+    }
+  }
+  return paints
+}
+
+// ---------- XObject arm ----------
+
+interface XObjectHit {
+  name: string
+  ref: string          // PDFRef tag, e.g. "12 0 R"
+  ctm: Matrix6
+  page: number
+}
+
+async function collectXObjectHits(
+  bytes: Uint8Array
+): Promise<{ hits: XObjectHit[]; numPages: number }> {
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true })
+  const hits: XObjectHit[] = []
+  for (let i = 0; i < doc.getPageCount(); i++) {
+    const page = doc.getPage(i)
+    const { XObject } = page.node.normalizedEntries()
+    for (const stream of resolveContentStreams(doc, page)) {
+      const { text } = decodeStreamText(stream)
+      for (const paint of scanXObjectPaints(text)) {
+        const raw = XObject.get(PDFName.of(paint.name))
+        // Image XObjects also pass through here — a full-page repeated image
+        // stamp is a legitimate watermark candidate too.
+        const refTag = raw instanceof PDFRef ? raw.toString() : `name:${paint.name}`
+        hits.push({ name: paint.name, ref: refTag, ctm: paint.ctm, page: i })
+      }
+    }
+  }
+  return { hits, numPages: doc.getPageCount() }
+}
+
+async function findXObjectCandidates(bytes: Uint8Array): Promise<Candidate[]> {
+  const { hits, numPages } = await collectXObjectHits(bytes)
+  if (numPages === 0 || hits.length === 0) return []
+
+  const groups = new Map<string, XObjectHit[]>()
+  for (const hit of hits) {
+    const sig = `xobj|${hit.ref}|${roundMatrix(hit.ctm)}`
+    const existing = groups.get(sig) ?? []
+    existing.push(hit)
+    groups.set(sig, existing)
+  }
+
+  const candidates: Candidate[] = []
+  for (const [sig, groupHits] of groups) {
+    const uniquePages = new Set(groupHits.map((h) => h.page))
+    const coverage = uniquePages.size / numPages
+    if (coverage < 0.8) continue
+
+    const preview = Array.from(uniquePages).slice(0, 5).map((pageIdx) => {
+      const hit = groupHits.find((h) => h.page === pageIdx)!
+      // Approximate bbox: CTM translation as the anchor corner. The exact
+      // extent would need the XObject's /BBox transformed by the CTM.
+      const x = hit.ctm[4]
+      const y = hit.ctm[5]
+      return { page: pageIdx, bbox: [x, y, x + 100, y + 100] as [number, number, number, number] }
+    })
+
+    candidates.push({
+      id: sig,
+      kind: 'xobject',
+      pageCoverage: coverage,
+      preview,
+      description: `XObject ${groupHits[0].ref} (/${groupHits[0].name}) on ${uniquePages.size}/${numPages} pages`
+    })
+  }
+  return candidates
+}
+
 export async function findWatermarkCandidates(bytes: Uint8Array): Promise<Candidate[]> {
-  // Task 2b extends this to also include findXObjectCandidates(bytes).
-  return findTextCandidates(bytes)
+  const [textArm, xobjArm] = await Promise.all([
+    findTextCandidates(bytes),
+    findXObjectCandidates(bytes)
+  ])
+  return [...textArm, ...xobjArm]
 }
 
 export async function stripWatermark(_bytes: Uint8Array, _candidateId: string): Promise<Uint8Array> {
