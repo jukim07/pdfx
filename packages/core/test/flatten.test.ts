@@ -1,8 +1,49 @@
 import { describe, it, expect } from 'vitest'
-import { PDFDocument, PDFName } from 'pdf-lib'
+import { inflateSync } from 'zlib'
+import { PDFDocument, PDFName, PDFRawStream, PDFArray, PDFRef } from 'pdf-lib'
 import { writeAnnots } from '../src/annots/write.js'
 import { flattenAnnots } from '../src/ops/flatten.js'
 import type { Annot } from '../src/annots/model.js'
+
+/**
+ * Decode all content streams on the first page of a saved PDF and return their
+ * concatenated operator text.  Works on PDFs written by pdf-lib (content
+ * streams are FlateDecode-compressed; after doc.save() they come back as
+ * PDFRawStream with the raw deflate bytes).
+ */
+async function pageContentText(bytes: Uint8Array): Promise<string> {
+  const doc = await PDFDocument.load(bytes)
+  const page = doc.getPages()[0]
+  const contents = page.node.Contents()
+  if (!contents) return ''
+
+  const streams: PDFRawStream[] = []
+
+  if (contents instanceof PDFArray) {
+    // Contents is an array of indirect refs to content streams.
+    for (let i = 0; i < contents.size(); i++) {
+      const ref = contents.get(i)
+      if (ref instanceof PDFRef) {
+        const obj = doc.context.lookup(ref)
+        if (obj instanceof PDFRawStream) streams.push(obj)
+      }
+    }
+  } else if (contents instanceof PDFRawStream) {
+    streams.push(contents)
+  }
+
+  const parts: string[] = []
+  for (const s of streams) {
+    const raw = s.getContents()
+    try {
+      parts.push(new TextDecoder().decode(inflateSync(raw)))
+    } catch {
+      // Stream was not compressed (rare for pdf-lib output); use as-is.
+      parts.push(new TextDecoder().decode(raw))
+    }
+  }
+  return parts.join('\n')
+}
 
 async function blankPdf(): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
@@ -165,5 +206,33 @@ describe('flattenAnnots', () => {
     const flat = await flattenAnnots(withAnnot)
     // Should not throw
     await expect(PDFDocument.load(flat)).resolves.toBeDefined()
+  })
+
+  // Geometry lock: ink paths must be emitted in PDF user-space (origin
+  // bottom-left) without any coordinate-space transformation.  drawSvgPath
+  // applies an internal y-flip CTM "1 0 0 -1 0 0 cm" that mirrors all
+  // coordinates around Y=0, rendering ink paths off-page.  Raw pushOperators
+  // must emit the path with no such flip matrix anywhere in the ink graphics
+  // state block.
+  it('ink flatten: content stream contains untransformed PDF user-space coordinates', async () => {
+    const withAnnot = await writeAnnots(await blankPdf(), [
+      {
+        type: 'ink',
+        page: 0,
+        paths: [[100, 700, 150, 650]],
+        color: { r: 0, g: 0, b: 1 },
+        borderWidth: 2,
+      },
+    ])
+    const flat = await flattenAnnots(withAnnot)
+    const text = await pageContentText(flat)
+    // The PDF moveTo operator is 'm', lineTo is 'l'.
+    // pdf-lib serialises integers without trailing zeros so "100 700 m".
+    expect(text).toContain('100 700 m')
+    expect(text).toContain('150 650 l')
+    // drawSvgPath introduces a y-flip concat-matrix "1 0 0 -1 0 0 cm" that
+    // mirrors coordinates around Y=0, placing the path off-page.  Raw
+    // pushOperators must not introduce this transformation.
+    expect(text).not.toContain('1 0 0 -1 0 0 cm')
   })
 })

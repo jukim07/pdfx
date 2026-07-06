@@ -1,4 +1,16 @@
-import { PDFDocument, PDFName, StandardFonts, rgb } from 'pdf-lib'
+import {
+  PDFDocument,
+  PDFName,
+  StandardFonts,
+  rgb,
+  pushGraphicsState,
+  popGraphicsState,
+  setStrokingRgbColor,
+  setLineWidth,
+  moveTo,
+  lineTo,
+  stroke,
+} from 'pdf-lib'
 import { BlendMode } from 'pdf-lib'
 import { readAnnots } from '../annots/read.js'
 import type { Annot, Quad } from '../annots/model.js'
@@ -22,7 +34,7 @@ function quadBox(quads: Quad[]): { x: number; y: number; w: number; h: number } 
  *   strikeout  → horizontal line at quad vertical midpoint
  *   note       → small filled square at rect origin (icon flattened as coloured marker)
  *   text (FreeText) → drawText at rect origin with annot fontSize
- *   ink        → SVG polyline path per ink path segment
+ *   ink        → raw PDF moveTo/lineTo/stroke per path segment (no SVG y-flip)
  *   stamp      → accepted-deferred (Phase 4b); no draw, /Annots still removed
  */
 export async function flattenAnnots(bytes: Uint8Array): Promise<Uint8Array> {
@@ -118,21 +130,24 @@ export async function flattenAnnots(bytes: Uint8Array): Promise<Uint8Array> {
         }
 
         case 'ink': {
-          // Ink: render each polyline as an SVG path string.
           for (const path of a.paths) {
             if (path.length < 2) continue
-            const svgParts: string[] = []
-            for (let i = 0; i + 1 < path.length; i += 2) {
-              const cmd = i === 0 ? 'M' : 'L'
-              svgParts.push(`${cmd} ${path[i]} ${path[i + 1]}`)
-            }
-            page.drawSvgPath(svgParts.join(' '), {
-              // SVG path coords are in user space already; no fill, only stroke.
-              color: undefined,
-              borderColor: rgb(a.color.r, a.color.g, a.color.b),
-              borderWidth: a.borderWidth,
-              opacity: 1,
-            })
+            // Emit raw PDF path operators in user-space (origin bottom-left).
+            // drawSvgPath applies an internal y-flip CTM ("1 0 0 -1 0 0 cm")
+            // because SVG origin is top-left; that would mirror ink coordinates
+            // around Y=0.  pushOperators bypasses the high-level API entirely.
+            page.pushOperators(
+              pushGraphicsState(),
+              setStrokingRgbColor(a.color.r, a.color.g, a.color.b),
+              setLineWidth(a.borderWidth),
+              moveTo(path[0], path[1]),
+              ...path.slice(2).reduce<ReturnType<typeof lineTo>[]>((acc, _, i, arr) => {
+                if (i % 2 === 0) acc.push(lineTo(arr[i], arr[i + 1]))
+                return acc
+              }, []),
+              stroke(),
+              popGraphicsState(),
+            )
           }
           break
         }
