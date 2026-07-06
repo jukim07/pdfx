@@ -40,7 +40,8 @@ export function useCollection(flash: (message: string) => void) {
   const { copySelected, pasteAfterSelected } = useClipboard(
     docs,
     selected,
-    setDocs,
+    docsRef,
+    dispatch,
     setSelected,
     flash
   )
@@ -208,22 +209,10 @@ export function useCollection(flash: (message: string) => void) {
   const movePageToNewDoc = useCallback(
     (source: PageRef, docIndex: number) => {
       const newDocId = crypto.randomUUID()
-      const current = docsRef.current
-      const srcDoc = current.find((d) => d.id === source.docId)
-      const originalIndex = srcDoc?.pages.findIndex((p) => p.id === source.pageId) ?? 0
+      const snapshot = docsRef.current
       dispatch({
-        do: () => moveOps.movePageToNewDoc(current, source, docIndex, newDocId),
-        undo: () => {
-          // Move page back from newDoc into original source doc, then newDoc will be
-          // auto-removed by movePageInto since it becomes empty.
-          const afterDo = moveOps.movePageToNewDoc(current, source, docIndex, newDocId)
-          return moveOps.movePageInto(
-            afterDo,
-            { docId: newDocId, pageId: source.pageId },
-            source.docId,
-            originalIndex
-          )
-        }
+        do: () => moveOps.movePageToNewDoc(snapshot, source, docIndex, newDocId),
+        undo: () => snapshot
       })
       setSelected({ docId: newDocId, pageId: source.pageId })
     },
@@ -278,6 +267,7 @@ export function useCollection(flash: (message: string) => void) {
     docs,
     setDocs,
     docsRef,
+    dispatch,
     selected,
     setSelected,
     selectPage,

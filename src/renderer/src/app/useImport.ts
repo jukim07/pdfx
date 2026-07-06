@@ -13,13 +13,14 @@ export function useImport(
   setBusy: (busy: boolean) => void,
   flash: (message: string) => void
 ) {
-  const { setDocs, docsRef, appendPagesToDoc, insertPagesIntoDoc, spliceDocsAfter } = collection
+  const { docsRef, dispatch, appendPagesToDoc, insertPagesIntoDoc, spliceDocsAfter } = collection
 
   const addFiles = useCallback(
     async (files: IncomingFile[]) => {
       if (files.length === 0) return
       setBusy(true)
       const failed: string[] = []
+      const allEntries: import('../types').DocEntry[] = []
       for (const file of files) {
         try {
           const conv = findConverter(file.name, file.data)
@@ -29,16 +30,23 @@ export function useImport(
             : file.data
           const provenance = buildProvenance(file, conv !== null)
           const entries = await importIntoDocs(name, data, provenance)
-          setDocs((prev) => [...prev, ...dedupeNames(prev, entries)])
+          allEntries.push(...entries)
         } catch (error) {
           console.error(`Failed to import ${file.name}`, error)
           failed.push(file.name)
         }
       }
+      if (allEntries.length > 0) {
+        const snapshot = docsRef.current
+        dispatch({
+          do: () => [...snapshot, ...dedupeNames(snapshot, allEntries)],
+          undo: () => snapshot
+        })
+      }
       setBusy(false)
       if (failed.length > 0) flash(`Could not open ${failed.join(', ')}`)
     },
-    [flash, setBusy, setDocs]
+    [flash, setBusy, docsRef, dispatch]
   )
 
   useEffect(() => {

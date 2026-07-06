@@ -1,12 +1,14 @@
 import { useCallback, useRef } from 'react'
 import { insertPastedPage } from './doc-ops/pages'
+import type { Command } from './useCommandStack'
 import type { PageRef } from './types'
 import type { DocEntry, PageEntry } from '../types'
 
 export function useClipboard(
   docs: DocEntry[],
   selected: PageRef | null,
-  setDocs: React.Dispatch<React.SetStateAction<DocEntry[]>>,
+  docsRef: React.MutableRefObject<DocEntry[]>,
+  dispatch: (cmd: Command) => void,
   setSelected: (sel: PageRef | null) => void,
   flash: (message: string) => void
 ) {
@@ -26,10 +28,14 @@ export function useClipboard(
   const pasteAfterSelected = useCallback(() => {
     const clip = clipboardRef.current
     if (!clip || !selected) return
+    const snapshot = docsRef.current
     const pasted: PageEntry = { ...clip, id: crypto.randomUUID() }
-    setDocs((prev) => insertPastedPage(prev, selected, pasted))
+    dispatch({
+      do: () => insertPastedPage(snapshot, selected, pasted),
+      undo: () => snapshot
+    })
     setSelected({ docId: selected.docId, pageId: pasted.id })
-  }, [selected, setDocs, setSelected])
+  }, [selected, docsRef, dispatch, setSelected])
 
   return { copySelected, pasteAfterSelected }
 }

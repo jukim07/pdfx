@@ -12,7 +12,7 @@ export function usePaste(
   setBusy: (busy: boolean) => void,
   flash: (message: string) => void
 ) {
-  const { docs, selected, setDocs, insertPagesAfter, pasteAfterSelected } = collection
+  const { docs, selected, docsRef, dispatch, insertPagesAfter, pasteAfterSelected } = collection
 
   const pasteFiles = useCallback(
     async (files: IncomingFile[]) => {
@@ -50,14 +50,18 @@ export function usePaste(
           insertPagesAfter(target, pagesFromSource(source, sizes, [0]))
         } else {
           const entries = await importIntoDocs('Pasted image', await imageToPdf(png))
-          setDocs((prev) => [...prev, ...dedupeNames(prev, entries)])
+          const snapshot = docsRef.current
+          dispatch({
+            do: () => [...snapshot, ...dedupeNames(snapshot, entries)],
+            undo: () => snapshot
+          })
         }
       } catch (error) {
         console.error('Image paste failed', error)
         flash('Could not paste image')
       }
     },
-    [docs, selected, insertPagesAfter, setDocs, flash]
+    [docs, selected, docsRef, dispatch, insertPagesAfter, flash]
   )
 
   const handlePaste = useCallback(async () => {
