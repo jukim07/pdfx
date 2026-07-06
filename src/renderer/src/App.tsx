@@ -255,7 +255,19 @@ export default function App(): React.JSX.Element {
     annot.clearRedactDrafts()
   }, [annot.clearRedactDrafts])
 
-  const layout = useMemo(() => computeLayout(docs), [docs])
+  const [axisFlip, setAxisFlip] = useState<boolean>(() => {
+    try { return localStorage.getItem('pdfx:axisFlip') === '1' } catch { return false }
+  })
+
+  const toggleAxisFlip = useCallback(() => {
+    setAxisFlip((v) => {
+      const next = !v
+      try { localStorage.setItem('pdfx:axisFlip', next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }, [])
+
+  const layout = useMemo(() => computeLayout(docs, axisFlip), [docs, axisFlip])
 
   const searchIndex = useSearchIndex(docs)
   const find = useFind(searchIndex.search, searchIndex.version)
@@ -415,6 +427,9 @@ export default function App(): React.JSX.Element {
           busy={busy}
           zoom={scale}
           compareMode={collection.compareMode}
+          onToggleCompareMode={collection.toggleCompareMode}
+          axisFlip={axisFlip}
+          onToggleAxisFlip={toggleAxisFlip}
           onZoomIn={() => canvasRef.current?.zoomIn()}
           onZoomOut={() => canvasRef.current?.zoomOut()}
           onZoomReset={() => canvasRef.current?.reset()}
@@ -429,7 +444,6 @@ export default function App(): React.JSX.Element {
           redactDrafts={annot.redactDrafts}
           onApplyRedact={() => void handleApplyRedact()}
           onCancelRedact={handleCancelRedact}
-          onToggleCompareMode={collection.toggleCompareMode}
         />
 
         {find.open && (

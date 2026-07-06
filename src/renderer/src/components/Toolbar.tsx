@@ -23,6 +23,9 @@ interface ToolbarProps {
   // Added by E2:
   compareMode: boolean
   onToggleCompareMode: () => void
+  // Added by E1:
+  axisFlip: boolean
+  onToggleAxisFlip: () => void
 }
 
 const isMac = window.api.platform === 'darwin'
@@ -47,7 +50,9 @@ export function Toolbar({
   onApplyRedact,
   onCancelRedact,
   compareMode,
-  onToggleCompareMode
+  onToggleCompareMode,
+  axisFlip,
+  onToggleAxisFlip
 }: ToolbarProps): React.JSX.Element {
   const redactCount = redactDrafts?.length ?? 0
   return (
@@ -101,6 +106,15 @@ export function Toolbar({
           onClick={onToggleCompareMode}
         >
           Compare
+        </button>
+      )}
+      {documentCount > 0 && (
+        <button
+          className={`btn glass${axisFlip ? ' active' : ''}`}
+          title="Flip layout axis"
+          onClick={onToggleAxisFlip}
+        >
+          ⇄
         </button>
       )}
       {documentCount > 0 && onAnnotTool && (

@@ -45,7 +45,30 @@ function docWidth(doc: DocEntry): number {
 
 export const DOC_HEIGHT = CARD_PAD_TOP + HEADER_BLOCK + BASE_PAGE_HEIGHT + CARD_PAD_BOTTOM
 
-export function computeLayout(docs: DocEntry[]): CanvasLayout {
+export function computeLayout(docs: DocEntry[], axisFlip = false): CanvasLayout {
+  if (axisFlip) {
+    // Horizontal strip: docs placed side-by-side left→right, each with its natural height.
+    const heights = docs.map((doc) => {
+      const maxPageH = Math.max(...doc.pages.map((p) => pageDisplayWidth(p.width, p.height)), BASE_PAGE_HEIGHT)
+      return CARD_PAD_TOP + HEADER_BLOCK + maxPageH + CARD_PAD_BOTTOM
+    })
+    const contentHeight = Math.max(1, Math.max(...heights, DOC_HEIGHT))
+
+    let x = 0
+    const items: DocPlacement[] = docs.map((doc, i) => {
+      const w = Math.max(MIN_DOC_WIDTH, docWidth(doc))
+      const placement: DocPlacement = { doc, x, y: 0, width: w, height: heights[i] }
+      x += w + DOC_GAP_Y // reuse gap constant for horizontal spacing
+      return placement
+    })
+
+    const contentWidth = Math.max(1, x - DOC_GAP_Y)
+    // Add an extra slot-width so the "add doc" ghost has room.
+    const slotHeight = contentHeight + DOC_GAP_Y
+    return { items, contentWidth: contentWidth + DOC_GAP_Y + MIN_DOC_WIDTH, contentHeight, slotHeight }
+  }
+
+  // Original vertical layout: docs stacked top→bottom.
   const widths = docs.map((doc) => Math.max(MIN_DOC_WIDTH, docWidth(doc)))
   const contentWidth = Math.max(1, ...widths)
 
