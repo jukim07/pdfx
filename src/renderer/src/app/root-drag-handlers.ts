@@ -10,6 +10,7 @@ const FILES_TYPE = 'Files'
 export interface RootDragDeps {
   layout: CanvasLayout
   canvasRef: React.RefObject<CanvasHandle | null>
+  compareMode: boolean
   dragKind: 'internal' | 'external' | null
   draggingPage: PageRef | null
   dropTarget: DropTarget | null
@@ -84,6 +85,10 @@ export function createRootDragHandlers(deps: RootDragDeps): RootDragHandlers {
       return
     }
     if (!event.dataTransfer.types.includes(FILES_TYPE)) {
+      deps.clearDrag()
+      return
+    }
+    if (deps.compareMode) {
       deps.clearDrag()
       return
     }

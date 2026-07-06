@@ -281,6 +281,7 @@ export default function App(): React.JSX.Element {
   const drag = useDragController({
     layout,
     canvasRef,
+    compareMode: collection.compareMode,
     movePageInto: collection.movePageInto,
     movePageToNewDoc: collection.movePageToNewDoc,
     onExternalDrop: handleExternalDropFiles
@@ -413,6 +414,7 @@ export default function App(): React.JSX.Element {
           pageCount={totalPages}
           busy={busy}
           zoom={scale}
+          compareMode={collection.compareMode}
           onZoomIn={() => canvasRef.current?.zoomIn()}
           onZoomOut={() => canvasRef.current?.zoomOut()}
           onZoomReset={() => canvasRef.current?.reset()}
@@ -427,6 +429,7 @@ export default function App(): React.JSX.Element {
           redactDrafts={annot.redactDrafts}
           onApplyRedact={() => void handleApplyRedact()}
           onCancelRedact={handleCancelRedact}
+          onToggleCompareMode={collection.toggleCompareMode}
         />
 
         {find.open && (

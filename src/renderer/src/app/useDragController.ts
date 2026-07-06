@@ -9,6 +9,7 @@ const DRAG_WATCHDOG_MS = 1000
 interface DragControllerDeps {
   layout: CanvasLayout
   canvasRef: React.RefObject<CanvasHandle | null>
+  compareMode: boolean
   movePageInto: (source: PageRef, targetDocId: string, index: number) => void
   movePageToNewDoc: (source: PageRef, docIndex: number) => void
   onExternalDrop: (files: IncomingFile[], target: DropTarget | null) => void
@@ -59,10 +60,14 @@ export function useDragController(deps: DragControllerDeps) {
     }, DRAG_WATCHDOG_MS)
   }, [clearDrag])
 
-  const startPageDrag = useCallback((docId: string, pageId: string) => {
-    setDragKind('internal')
-    setDraggingPage({ docId, pageId })
-  }, [])
+  const startPageDrag = useCallback(
+    (docId: string, pageId: string) => {
+      if (deps.compareMode) return
+      setDragKind('internal')
+      setDraggingPage({ docId, pageId })
+    },
+    [deps.compareMode]
+  )
 
   useEffect(() => {
     window.addEventListener('dragend', clearDrag)
@@ -84,6 +89,7 @@ export function useDragController(deps: DragControllerDeps) {
   const handlers = createRootDragHandlers({
     layout: deps.layout,
     canvasRef: deps.canvasRef,
+    compareMode: deps.compareMode,
     dragKind,
     draggingPage,
     dropTarget,

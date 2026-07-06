@@ -20,6 +20,9 @@ interface ToolbarProps {
   redactDrafts?: DraftRedactRegion[]
   onApplyRedact?: () => void
   onCancelRedact?: () => void
+  // Added by E2:
+  compareMode: boolean
+  onToggleCompareMode: () => void
 }
 
 const isMac = window.api.platform === 'darwin'
@@ -42,7 +45,9 @@ export function Toolbar({
   onOpenSignaturePicker,
   redactDrafts,
   onApplyRedact,
-  onCancelRedact
+  onCancelRedact,
+  compareMode,
+  onToggleCompareMode
 }: ToolbarProps): React.JSX.Element {
   const redactCount = redactDrafts?.length ?? 0
   return (
@@ -88,6 +93,15 @@ export function Toolbar({
             </svg>
           </button>
         </div>
+      )}
+      {documentCount > 1 && (
+        <button
+          className={`btn glass${compareMode ? ' active' : ''}`}
+          title="Compare mode — locks page positions"
+          onClick={onToggleCompareMode}
+        >
+          Compare
+        </button>
       )}
       {documentCount > 0 && onAnnotTool && (
         <div className="annot-cluster">

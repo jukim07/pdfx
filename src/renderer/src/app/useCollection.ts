@@ -10,6 +10,10 @@ import type { DocEntry, PageEntry } from '../types'
 export function useCollection(flash: (message: string) => void) {
   const [docs, setDocs] = useState<DocEntry[]>([])
   const [selected, setSelected] = useState<PageRef | null>(null)
+  const [compareMode, setCompareMode] = useState(false)
+
+  const toggleCompareMode = useCallback(() => setCompareMode((v) => !v), [])
+
   const docsRef = useRef(docs)
   docsRef.current = docs
 
@@ -142,6 +146,8 @@ export function useCollection(flash: (message: string) => void) {
     setSelected,
     selectPage,
     clearSelection,
+    compareMode,
+    toggleCompareMode,
     removeDoc,
     renameDoc,
     rotatePage,
