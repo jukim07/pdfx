@@ -29,4 +29,6 @@ export interface TestSnapshot {
   }
   cropOverlayActive: boolean
   cropDialogOpen: boolean
+  annotDraftCount: number
+  annotTool: string
 }

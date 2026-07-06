@@ -66,6 +66,30 @@ export async function getState(page: Page): Promise<TestSnapshot> {
   ) as Promise<TestSnapshot>
 }
 
+/** Invoke the save-annots action via the test bridge (bypasses the toolbar
+ *  button which is occluded by the full-view overlay at z-index 30). */
+export async function triggerSaveAnnots(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    (
+      window as never as {
+        __pdfxTest: { actions: { saveAnnots: () => Promise<void> } }
+      }
+    ).__pdfxTest.actions.saveAnnots()
+  )
+}
+
+/** Close the full-view via the test bridge action (the close button can be
+ *  unreliable in automated tests due to pointer-event layering). */
+export async function triggerCloseFullView(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(
+      window as never as {
+        __pdfxTest: { actions: { closeFullView: () => void } }
+      }
+    ).__pdfxTest.actions.closeFullView()
+  })
+}
+
 export async function shot(page: Page, spec: string, name: string): Promise<void> {
   const dir = join(EVIDENCE, spec)
   await mkdir(dir, { recursive: true })

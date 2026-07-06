@@ -147,34 +147,39 @@ export default function App(): React.JSX.Element {
     onCloseFind: find.closeFind
   })
 
-  useTestBridge(() => ({
-    docs: docs.map((d) => ({
-      id: d.id,
-      name: d.name,
-      pages: d.pages.map((p) => ({
-        id: p.id,
-        pageIndex: p.pageIndex,
-        width: p.width,
-        height: p.height,
-        rotation: p.rotation ?? 0,
-        cropBox: p.cropBox ?? null
-      }))
-    })),
-    selected: collection.selected,
-    busy,
-    toast,
-    find: {
-      open: find.open,
-      query: find.query,
-      matchedQuery: find.matchedQuery,
-      pages: find.result.pages,
-      occurrences: find.result.occurrences,
-      matchingPageIds: [...find.result.pageIds],
-      matchingDocIds: [...find.result.docIds]
-    },
-    cropOverlayActive: cropTarget !== null,
-    cropDialogOpen: pendingCrop !== null
-  }))
+  useTestBridge(
+    () => ({
+      docs: docs.map((d) => ({
+        id: d.id,
+        name: d.name,
+        pages: d.pages.map((p) => ({
+          id: p.id,
+          pageIndex: p.pageIndex,
+          width: p.width,
+          height: p.height,
+          rotation: p.rotation ?? 0,
+          cropBox: p.cropBox ?? null
+        }))
+      })),
+      selected: collection.selected,
+      busy,
+      toast,
+      find: {
+        open: find.open,
+        query: find.query,
+        matchedQuery: find.matchedQuery,
+        pages: find.result.pages,
+        occurrences: find.result.occurrences,
+        matchingPageIds: [...find.result.pageIds],
+        matchingDocIds: [...find.result.docIds]
+      },
+      cropOverlayActive: cropTarget !== null,
+      cropDialogOpen: pendingCrop !== null,
+      annotDraftCount: annot.drafts.length,
+      annotTool: annot.tool
+    }),
+    { saveAnnots: handleSaveAnnots, closeFullView: fullViewState.closeFullView }
+  )
 
   const onScaleChange = useCallback((next: number) => setScale(next), [])
   const onSettle = useCallback(() => setRenderVersion((v) => v + 1), [])
