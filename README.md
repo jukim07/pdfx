@@ -78,6 +78,16 @@ Available tools: `pdfx_info`, `pdfx_extract`, `pdfx_split`, `pdfx_merge`,
 
 (`pdfx_stamp` / `pdfx_redact` arrive in a later phase; the CLI `flatten` verb is available but `pdfx_flatten` is not yet exposed as an MCP tool.)
 
+## Signatures
+
+`pdfx stamp` and the GUI signature pad add a **visual** signature — an image
+stamp annotation (PDF `/Stamp`). This is NOT a cryptographic digital signature:
+it does not create a `/Sig` field, does not sign the document with a certificate,
+and provides no tamper-evidence or identity verification. Cryptographic signing
+(PKCS#7, certificate chains) is deliberately out of scope and deferred
+indefinitely. If you need a legally-binding digital signature, use a dedicated
+signing tool.
+
 ## License
 
 MIT
