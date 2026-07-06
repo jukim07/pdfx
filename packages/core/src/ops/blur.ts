@@ -51,19 +51,19 @@ export function boxBlur3(
 }
 
 /**
- * Raster the redaction region from the ORIGINAL page bytes (so the blurred
- * image reflects original content), apply box-blur ×3, and return a PNG crop
- * sized to the region.
+ * Raster the redaction region from POST-surgery page bytes, apply box-blur ×3,
+ * and return a PNG crop sized to the region.
  *
- * @param originalBytes  Pre-surgery PDF bytes — blur renders the content that
- *                       was there, not the empty space left after text removal.
- * @param region         0-based page index + PDF-space rect (origin bottom-left).
- * @param pageWidthPt    PDF page width in points (from pdf-lib page.getSize()).
- * @param pageHeightPt   PDF page height in points.
- * @param dpi            Raster resolution; default 150.
+ * @param postSurgeryBytes  Post-surgery PDF bytes — blur renders only content
+ *                          that survived text removal, so blurred pixels contain
+ *                          no recoverable glyph information.
+ * @param region            0-based page index + PDF-space rect (origin bottom-left).
+ * @param pageWidthPt       PDF page width in points (from pdf-lib page.getSize()).
+ * @param pageHeightPt      PDF page height in points.
+ * @param dpi               Raster resolution; default 150.
  */
 export async function blurredRegionPng(
-  originalBytes: Uint8Array,
+  postSurgeryBytes: Uint8Array,
   region: RedactRegion,
   pageWidthPt: number,
   pageHeightPt: number,
@@ -72,7 +72,7 @@ export async function blurredRegionPng(
   // renderPages is 1-based; RedactRegion.page is 0-based.
   const targetPage = region.page + 1
   let pagePng: Uint8Array | null = null
-  for await (const { page, png } of renderPages(originalBytes, { dpi, pages: [targetPage] })) {
+  for await (const { page, png } of renderPages(postSurgeryBytes, { dpi, pages: [targetPage] })) {
     if (page === targetPage) pagePng = png
   }
   if (!pagePng) throw new Error(`renderPages returned no raster for page ${region.page}`)

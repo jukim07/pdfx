@@ -179,7 +179,7 @@ export async function redactRegions(
     if (opts.mode === 'blur') {
       const { width, height } = page.getSize()
       const { blurredRegionPng } = await import('./blur.js')
-      const png = await blurredRegionPng(bytes, r, width, height, opts.dpi ?? 150)
+      const png = await blurredRegionPng(out, r, width, height, opts.dpi ?? 150)
       const img = await doc2.embedPng(png)
       page.drawImage(img, { x: r.rect.x, y: r.rect.y, width: r.rect.w, height: r.rect.h })
     } else {
