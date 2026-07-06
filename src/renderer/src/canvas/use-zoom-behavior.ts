@@ -50,6 +50,13 @@ export function useZoomBehavior({
   onScaleRef.current = onScaleChange
   const onSettleRef = useRef(onSettle)
   onSettleRef.current = onSettle
+  const onSnapRef = useRef<(() => { k: number; x: number; y: number } | null) | undefined>(
+    () => {
+      if (!viewportRef.current) return null
+      const t = computeFitTransform(viewportRef.current, dims.current!)
+      return { k: t.k, x: t.x, y: t.y }
+    }
+  )
 
   const fitTransform = (): ReturnType<typeof zoomIdentity.translate> =>
     computeFitTransform(viewportRef.current!, dims.current!)
@@ -66,7 +73,8 @@ export function useZoomBehavior({
       idleTimer,
       lastTick,
       onScaleRef,
-      onSettleRef
+      onSettleRef,
+      onSnapRef
     })
 
     zoomRef.current = zoomBehavior
