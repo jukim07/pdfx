@@ -13,7 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "*",
+    "@modelcontextprotocol/sdk": "1.15.0",
     "@pdfx/core": "*",
     "pdf-lib": "1.17.1"
   },

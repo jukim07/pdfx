@@ -32,12 +32,12 @@
   },
   "dependencies": {
     "@electron-toolkit/preload": "3.0.2",
-    "@electron-toolkit/utils": "4.0.0",
-    "@modelcontextprotocol/sdk": "1.15.0",
-    "chokidar": "4.0.3"
+    "@electron-toolkit/utils": "4.0.0"
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "1.0.1",
+    "@modelcontextprotocol/sdk": "1.15.0",
+    "chokidar": "4.0.3",
     "@playwright/test": "^1.61.1",
     "@tesseract.js-data/deu": "1.0.0",
     "@tesseract.js-data/eng": "1.0.0",
