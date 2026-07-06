@@ -166,8 +166,8 @@ async function readAttachmentMimeTypes(bytes: Uint8Array): Promise<Map<string, s
         if (!(fStream instanceof PDFRawStream)) continue
         const subtypeObj = fStream.dict.get(PDFName.of('Subtype'))
         if (!subtypeObj) continue
-        // PDFName.encodedName is the raw /xxx string (with leading /)
-        const rawName: string = (subtypeObj as PDFName).encodedName ?? ''
+        // PDFName.asString() is the raw /xxx string (with leading /)
+        const rawName: string = subtypeObj instanceof PDFName ? subtypeObj.asString() : ''
         // Strip leading / and URL-decode # sequences
         const mime = rawName.replace(/^\//, '').replace(/#([0-9A-Fa-f]{2})/g, (_, h) =>
           String.fromCharCode(parseInt(h, 16))
