@@ -30,7 +30,10 @@ export default defineConfig({
         // redact engine's lazy imports. The renderer never executes those paths
         // (redaction runs in the main process over IPC), but rollup still tries
         // to bundle the .node binary unless the module is externalized.
-        external: ['@napi-rs/canvas']
+        // Node built-ins used by watermark.ts (zlib, fs, path, url, module) and
+        // @pdf-lib/fontkit (CJS-only) are likewise Node-only; rebuildLegible runs
+        // in the main process over IPC, so the renderer never calls them.
+        external: ['@napi-rs/canvas', 'zlib', 'fs', 'path', 'url', 'module', '@pdf-lib/fontkit']
       }
     },
     worker: {

@@ -3,6 +3,19 @@ import type { PDFPage } from 'pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { OPS } from 'pdfjs-dist'
 import { inflateSync, deflateSync } from 'zlib'
+import { readFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+import { createRequire } from 'module'
+
+// @pdf-lib/fontkit ships CJS-only (no exports field); use createRequire so
+// NodeNext ESM module resolution doesn't reject the package.
+const _require = createRequire(import.meta.url)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fontkit = _require('@pdf-lib/fontkit') as any
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 export interface WatermarkOpts {
   text: string
@@ -647,6 +660,95 @@ async function stripXObjectWatermark(bytes: Uint8Array, candidateId: string): Pr
   return doc.save()
 }
 
-export async function rebuildLegible(_bytes: Uint8Array, _opts?: LegibleOpts): Promise<Uint8Array> {
-  throw new Error('not yet implemented')
+// Path to the bundled OpenDyslexic font OTF file.
+// In production (packaged Electron), resources/ is at process.resourcesPath;
+// during development and in tests, it's relative to the repo root.
+function getOpenDyslexicPath(): string {
+  // Allow tests and CLI to override font dir via env var
+  if (process.env['PDFX_FONT_DIR']) {
+    return join(process.env['PDFX_FONT_DIR'], 'OpenDyslexic-Regular.otf')
+  }
+  // Packaged Electron: resources/fonts/ lives at process.resourcesPath
+  const procType = (process as { type?: string }).type
+  if (procType === 'browser' || procType === 'renderer') {
+    return join((process as unknown as { resourcesPath: string }).resourcesPath, 'fonts', 'OpenDyslexic-Regular.otf')
+  }
+  // CLI / test: repo-relative (this file is packages/core/src/ops/watermark.ts → 4 levels up to root)
+  return join(__dirname, '../../../../resources/fonts/OpenDyslexic-Regular.otf')
+}
+
+interface TextRun {
+  str: string
+  x: number
+  y: number
+  fontSize: number
+}
+
+async function extractTextRuns(bytes: Uint8Array): Promise<TextRun[][]> {
+  const loadingTask = getDocument({ data: bytes.slice() })
+  const pdf = await loadingTask.promise
+  const pages: TextRun[][] = []
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum)
+    const content = await page.getTextContent()
+    const runs: TextRun[] = []
+
+    for (const item of content.items) {
+      if (!('str' in item) || (item as { str: string }).str.trim() === '') continue
+      // item.transform = [scaleX, skewX, skewY, scaleY, translateX, translateY]
+      const t = (item as { transform: number[] }).transform
+      const x = t[4]
+      const y = t[5]
+      // Derive font size from scale components
+      const fontSize = Math.sqrt(t[0] * t[0] + t[1] * t[1])
+      const hasEOL = (item as { hasEOL?: boolean }).hasEOL === true
+      runs.push({ str: (item as { str: string }).str + (hasEOL ? '\n' : ''), x, y, fontSize })
+    }
+
+    pages.push(runs)
+  }
+
+  return pages
+}
+
+export async function rebuildLegible(bytes: Uint8Array, opts?: LegibleOpts): Promise<Uint8Array> {
+  const { sizeDelta = 4, color = [0, 0, 0] } = opts ?? {}
+
+  const fontBytes = readFileSync(getOpenDyslexicPath())
+
+  // Extract text runs from source via pdfjs
+  const allRuns = await extractTextRuns(bytes)
+
+  // Get page sizes from pdf-lib (pdfjs does not expose user-unit page dimensions directly)
+  const srcDoc = await PDFDocument.load(bytes, { ignoreEncryption: true })
+  const outDoc = await PDFDocument.create()
+  outDoc.registerFontkit(fontkit)
+  const font = await outDoc.embedFont(fontBytes)
+
+  for (let i = 0; i < srcDoc.getPageCount(); i++) {
+    const srcPage = srcDoc.getPage(i)
+    const { width, height } = srcPage.getSize()
+    const outPage = outDoc.addPage([width, height])
+
+    const runs = allRuns[i] ?? []
+    for (const run of runs) {
+      const size = Math.max(6, run.fontSize + sizeDelta)
+      try {
+        outPage.drawText(run.str.replace(/\n/g, ' ').trim(), {
+          x: run.x,
+          y: run.y,
+          size,
+          font,
+          color: rgb(color[0], color[1], color[2]),
+          opacity: 1
+        })
+      } catch {
+        // Skip individual runs that fail (e.g., coordinates out of page bounds)
+      }
+    }
+  }
+
+  outDoc.setProducer('PDFx rebuildLegible')
+  return outDoc.save()
 }

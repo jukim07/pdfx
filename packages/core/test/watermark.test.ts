@@ -258,6 +258,45 @@ describe('stripWatermark — position-discriminated removal (Finding 1)', () => 
   })
 })
 
+describe('rebuildLegible', () => {
+  it('produces a valid PDF with same page count and original is untouched', async () => {
+    // Use a small real PDF with text. Build one programmatically.
+    const doc = await PDFDocument.create()
+    for (let i = 0; i < 3; i++) {
+      const page = doc.addPage([612, 792])
+      page.drawText(`The quick brown fox page ${i + 1}`, { x: 72, y: 700, size: 12 })
+    }
+    const original = await doc.save()
+    const originalCopy = original.slice()
+
+    const { rebuildLegible } = await import('../src/ops/watermark.js')
+    const legible = await rebuildLegible(original, { font: 'opendyslexic', sizeDelta: 4 })
+
+    // Original must be untouched
+    expect(original).toEqual(originalCopy)
+
+    // Output is a valid PDF
+    const loaded = await PDFDocument.load(legible)
+    expect(loaded.getPageCount()).toBe(3)
+
+    // Output is substantially larger than the input (OpenDyslexic OTF is ~210KB, so the
+    // legible PDF should be much larger than the source text-only PDF).
+    expect(legible.length).toBeGreaterThan(original.length + 50_000)
+
+    // Font name appears in the PDF object graph (pdf-lib stores /BaseFont as uncompressed
+    // dict text, but the xref may be compressed — iterate objects instead of raw bytes)
+    const context = loaded.context
+    let foundFontName = false
+    for (const [, obj] of context.enumerateIndirectObjects()) {
+      if (obj.toString().toLowerCase().includes('opendyslexic')) {
+        foundFontName = true
+        break
+      }
+    }
+    expect(foundFontName).toBe(true)
+  })
+})
+
 describe('stripWatermark', () => {
   it('removes the detected DRAFT watermark: text gone from all pages', async () => {
     const pdf = await makeDraftPdf(5)
