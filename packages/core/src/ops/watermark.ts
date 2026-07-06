@@ -455,8 +455,176 @@ export async function findWatermarkCandidates(bytes: Uint8Array): Promise<Candid
   return [...textArm, ...xobjArm]
 }
 
-export async function stripWatermark(_bytes: Uint8Array, _candidateId: string): Promise<Uint8Array> {
-  throw new Error('not yet implemented')
+export async function stripWatermark(bytes: Uint8Array, candidateId: string): Promise<Uint8Array> {
+  // Dispatch on the signature prefix set by the detection arms:
+  // Task 2 text arm → `text|…`, Task 2b xobject arm → `xobj|…`.
+  if (candidateId.startsWith('xobj|')) return stripXObjectWatermark(bytes, candidateId)
+  return stripTextWatermark(bytes, candidateId)
+}
+
+// ---------- text arm removal ----------
+
+// Convert a unicode string to its PDF hex-string literal form (upper-case hex
+// pairs of the latin1/CP1252 byte values — which is what pdf-lib's drawText
+// emits for standard fonts).  Example: 'DRAFT' → '4452414654'.
+function textToHex(text: string): string {
+  return Array.from(text)
+    .map((c) => c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))
+    .join('')
+}
+
+// Re-collect text hits from the input bytes, then for each page that has matching
+// hits, remove those operator sequences from the raw content stream bytes.
+async function stripTextWatermark(bytes: Uint8Array, candidateId: string): Promise<Uint8Array> {
+  // Step 1: identify per-page regions matching candidateId via pdfjs getOperatorList
+  const { hits } = await collectTextHits(bytes)
+  const matchingHits = hits.filter((h) => sigHash(h.text, h.ctm) === candidateId)
+  if (matchingHits.length === 0) return bytes
+
+  const matchingTexts = new Set(matchingHits.map((h) => h.text))
+
+  // Step 2: load with pdf-lib for raw stream manipulation
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true })
+
+  for (let i = 0; i < doc.getPageCount(); i++) {
+    const page = doc.getPage(i)
+    const pageHits = matchingHits.filter((h) => h.page === i)
+    if (pageHits.length === 0) continue
+
+    for (const stream of resolveContentStreams(doc, page)) {
+      const decoded = decodeStreamText(stream)
+      let streamText = decoded.text
+
+      for (const text of matchingTexts) {
+        const hexText = textToHex(text)
+        // pdf-lib drawText emits hex-string show ops: `<HEX> Tj`
+        // preceded on the same or prior line by a `Tm` (text matrix).
+        // Remove: the Tm line + optional whitespace + the <HEX> Tj line.
+        // Also handle the parenthesis form `(text) Tj` and TJ variants.
+        const hexTjPattern = new RegExp(
+          // optional preceding Tm instruction (numbers + Tm) on its own line
+          `(?:[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +Tm[ \\t]*\\n)?` +
+          // hex show: <HEXTEXT> Tj  (case-insensitive hex digits)
+          `<${hexText}>[ \\t]*Tj[ \\t]*\\n?`,
+          'gi'
+        )
+        streamText = streamText.replace(hexTjPattern, '')
+
+        // Parenthesis form: `(text) Tj` — escape PDF special chars
+        const escaped = text.replace(/[\\()]/g, '\\$&')
+        const parenTjPattern = new RegExp(
+          `(?:[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +[-\\d.e]+ +Tm[ \\t]*\\n)?` +
+          `\\(${escaped}\\)[ \\t]*Tj[ \\t]*\\n?`,
+          'g'
+        )
+        streamText = streamText.replace(parenTjPattern, '')
+
+        // q...Q blocks wrapping the watermark (some generators do use q/Q)
+        const qBlockHexPattern = new RegExp(
+          `q[^]*?<${hexText}>[^]*?Tj[^]*?Q[ \\t]*\\n?`,
+          'gi'
+        )
+        streamText = streamText.replace(qBlockHexPattern, '')
+        const qBlockParenPattern = new RegExp(
+          `q[^]*?\\(${escaped}\\)[^]*?Tj[^]*?Q[ \\t]*\\n?`,
+          'g'
+        )
+        streamText = streamText.replace(qBlockParenPattern, '')
+      }
+
+      if (streamText !== decoded.text) {
+        encodeStreamText(stream, streamText, decoded.compressed, doc)
+      }
+    }
+  }
+
+  return doc.save()
+}
+
+// ---------- xobject arm removal ----------
+
+// Splice matching `/Name Do` paints (with their innermost enclosing q…Q block)
+// out of the stream text. Cuts are merged and applied back-to-front so offsets
+// from scanXObjectPaints stay valid.
+function removeXObjectPaintBlocks(
+  streamText: string,
+  namesForRef: Set<string>,
+  ctmKey: string
+): string {
+  const paints = scanXObjectPaints(streamText)
+  const cuts: { start: number; end: number }[] = []
+  for (const p of paints) {
+    if (!namesForRef.has(p.name)) continue
+    if (roundMatrix(p.ctm) !== ctmKey) continue
+    if (p.blockEndAfterQ != null) {
+      cuts.push({ start: p.blockStart, end: p.blockEndAfterQ })
+    } else {
+      // Not inside a q…Q pair: remove just `/Name … Do`
+      cuts.push({ start: p.nameStart, end: p.doEnd })
+    }
+  }
+  if (cuts.length === 0) return streamText
+
+  cuts.sort((a, b) => a.start - b.start)
+  let out = ''
+  let cursor = 0
+  for (const c of cuts) {
+    if (c.start < cursor) continue   // nested/overlapping cut — already removed
+    out += streamText.slice(cursor, c.start)
+    cursor = c.end
+  }
+  out += streamText.slice(cursor)
+  return out
+}
+
+async function stripXObjectWatermark(bytes: Uint8Array, candidateId: string): Promise<Uint8Array> {
+  // candidateId = `xobj|<ref tag>|<rounded CTM>`; ref tags ("12 0 R") contain
+  // no '|' so a two-split is safe.
+  const firstSep = candidateId.indexOf('|')
+  const secondSep = candidateId.indexOf('|', firstSep + 1)
+  const refTag = candidateId.slice(firstSep + 1, secondSep)
+  const ctmKey = candidateId.slice(secondSep + 1)
+
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true })
+
+  for (let i = 0; i < doc.getPageCount(); i++) {
+    const page = doc.getPage(i)
+    const { XObject } = page.node.normalizedEntries()
+
+    // Which resource name(s) on THIS page point at the candidate ref
+    const namesForRef = new Set<string>()
+    for (const [key, value] of XObject.entries()) {
+      const name = key.asString().slice(1)   // PDFName.asString() includes the leading '/'
+      const tag = value instanceof PDFRef ? value.toString() : `name:${name}`
+      if (tag === refTag) namesForRef.add(name)
+    }
+    if (namesForRef.size === 0) continue
+
+    let anyPaintLeft = false
+    for (const stream of resolveContentStreams(doc, page)) {
+      const decoded = decodeStreamText(stream)
+      const rewritten = removeXObjectPaintBlocks(decoded.text, namesForRef, ctmKey)
+      if (rewritten !== decoded.text) {
+        encodeStreamText(stream, rewritten, decoded.compressed, doc)
+      }
+      // Check whether any paint of these names survives (e.g. same XObject
+      // painted elsewhere on the page with a DIFFERENT CTM — keep those)
+      if (scanXObjectPaints(rewritten).some((p) => namesForRef.has(p.name))) {
+        anyPaintLeft = true
+      }
+    }
+
+    // Remove the XObject resource entry once nothing on the page paints it.
+    // The unreferenced XObject object may remain in the file after save;
+    // pdf-lib does not garbage-collect orphans — acceptable (nothing renders).
+    if (!anyPaintLeft) {
+      for (const name of namesForRef) {
+        XObject.delete(PDFName.of(name))
+      }
+    }
+  }
+
+  return doc.save()
 }
 
 export async function rebuildLegible(_bytes: Uint8Array, _opts?: LegibleOpts): Promise<Uint8Array> {

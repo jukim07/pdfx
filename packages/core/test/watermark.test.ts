@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { PDFDocument, degrees, rgb } from 'pdf-lib'
-import { addWatermark, findWatermarkCandidates } from '../src/ops/watermark.js'
+import { addWatermark, findWatermarkCandidates, stripWatermark } from '../src/ops/watermark.js'
 import { extractText } from '../src/extract/text.js'
+
+// PDF streams are FlateDecode-compressed; literal text does not appear in raw
+// bytes. Use extractText for content survival assertions instead.
+
 
 async function makeDraftPdf(pageCount = 5): Promise<Uint8Array> {
   // Build a programmatic PDF where pages 1..pageCount-1 all have an identical
@@ -133,5 +137,63 @@ describe('addWatermark', () => {
     for (const pageText of pages) {
       expect(pageText.text, `page ${pageText.page} missing watermark`).toContain('DRAFT')
     }
+  })
+})
+
+describe('stripWatermark', () => {
+  it('removes the detected DRAFT watermark: text gone from all pages', async () => {
+    const pdf = await makeDraftPdf(5)
+
+    // Detect
+    const candidates = await findWatermarkCandidates(pdf)
+    const draft = candidates.find((c) => c.description.toLowerCase().includes('draft'))
+    expect(draft).toBeDefined()
+
+    // Strip
+    const stripped = await stripWatermark(pdf, draft!.id)
+
+    // Assertion 1: still a valid PDF with same page count
+    const loaded = await PDFDocument.load(stripped)
+    expect(loaded.getPageCount()).toBe(5)
+
+    // Assertion 2: re-running detection finds no watermark candidate
+    const remaining = await findWatermarkCandidates(stripped)
+    const draftRemaining = remaining.find((c) => c.description.toLowerCase().includes('draft'))
+    expect(draftRemaining).toBeUndefined()
+
+    // Assertion 3: normal page text survives — extractText sees "Page 1" on page 0
+    // (streams are compressed so rawText checks don't work; use text extraction instead)
+    const pages = await extractText(stripped)
+    expect(pages.some((p) => p.text.includes('Page 1'))).toBe(true)
+  })
+
+  it('removes an xobject watermark: paint op and resource entry gone', async () => {
+    const pdf = await makeXObjectDraftPdf(5)
+
+    // Detect the xobject candidate
+    const candidates = await findWatermarkCandidates(pdf)
+    const xobj = candidates.find((c) => c.kind === 'xobject')
+    expect(xobj).toBeDefined()
+
+    // Strip
+    const stripped = await stripWatermark(pdf, xobj!.id)
+
+    // Assertion 1: still a valid PDF with same page count
+    const loaded = await PDFDocument.load(stripped)
+    expect(loaded.getPageCount()).toBe(5)
+
+    // Assertion 2 (op removal): re-detection finds no xobject candidate
+    const remaining = await findWatermarkCandidates(stripped)
+    expect(remaining.filter((c) => c.kind === 'xobject').length).toBe(0)
+
+    // Assertion 3 (visual removal): every page's XObject resource dict is
+    // empty — nothing left to paint — and normal page text survives
+    for (let i = 0; i < loaded.getPageCount(); i++) {
+      const { XObject } = loaded.getPage(i).node.normalizedEntries()
+      expect(XObject.entries().length).toBe(0)
+    }
+    // Normal "Page N" text must survive the strip operation
+    const pages = await extractText(stripped)
+    expect(pages.some((p) => p.text.includes('Page 1'))).toBe(true)
   })
 })
