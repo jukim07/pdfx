@@ -3,6 +3,7 @@ import { BASE_PAGE_HEIGHT, DOC_SLOT } from '../../canvas/layout'
 import { DocumentRow } from '../DocumentRow'
 import type { DocPlacement } from '../../canvas/layout'
 import type { PageRef } from '../../app/types'
+import type { CropRect } from '../CropOverlay'
 
 interface DocLayerProps {
   items: DocPlacement[]
@@ -23,6 +24,10 @@ interface DocLayerProps {
   onPageDragEnd: () => void
   onAddPage: (docId: string) => void
   onRotatePage: (docId: string, pageId: string, delta: 90 | -90) => void
+  cropTargetPageId: string | null
+  onStartCrop: (docId: string, pageId: string) => void
+  onCropFinished: (rect: CropRect) => void
+  onCropCancel: () => void
 }
 
 function DocLayerImpl(props: DocLayerProps): React.JSX.Element {
@@ -68,6 +73,10 @@ function DocLayerImpl(props: DocLayerProps): React.JSX.Element {
               onPageDragEnd={props.onPageDragEnd}
               onAddPage={props.onAddPage}
               onRotatePage={props.onRotatePage}
+              cropTargetPageId={props.cropTargetPageId}
+              onStartCrop={props.onStartCrop}
+              onCropFinished={props.onCropFinished}
+              onCropCancel={props.onCropCancel}
             />
           </div>
         )

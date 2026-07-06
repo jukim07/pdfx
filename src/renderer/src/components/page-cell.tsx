@@ -4,6 +4,7 @@ import type { OcrWord } from '../ocr/types'
 import { pageDisplayWidth } from '../canvas/layout'
 import { PageView } from './PageView'
 import { buildPageDragImage } from './page-drag-image'
+import { CropOverlay, type CropRect } from './CropOverlay'
 
 interface PageCellProps {
   docId: string
@@ -18,11 +19,15 @@ interface PageCellProps {
   ocrWords: OcrWord[] | undefined
   pagesDraggable: boolean
   visibleNumber: number
+  cropActive: boolean
   onSelectPage: (docId: string, pageId: string) => void
   onOpenPage: (docId: string, pageId: string) => void
   onPageDragStart: (docId: string, pageId: string) => void
   onPageDragEnd: () => void
   onRotatePage: (docId: string, pageId: string, delta: 90 | -90) => void
+  onStartCrop: (docId: string, pageId: string) => void
+  onCropFinished: (rect: CropRect) => void
+  onCropCancel: () => void
 }
 
 function PageCellImpl({
@@ -38,11 +43,15 @@ function PageCellImpl({
   ocrWords,
   pagesDraggable,
   visibleNumber,
+  cropActive,
   onSelectPage,
   onOpenPage,
   onPageDragStart,
   onPageDragEnd,
-  onRotatePage
+  onRotatePage,
+  onStartCrop,
+  onCropFinished,
+  onCropCancel
 }: PageCellProps): React.JSX.Element {
   return (
     <div
@@ -121,7 +130,18 @@ function PageCellImpl({
         >
           ⟳
         </button>
+        <button
+          type="button"
+          title="Crop page"
+          onClick={(e) => {
+            e.stopPropagation()
+            onStartCrop(docId, page.id)
+          }}
+        >
+          ⌗
+        </button>
       </div>
+      {cropActive && <CropOverlay onCropFinished={onCropFinished} onCancel={onCropCancel} />}
     </div>
   )
 }

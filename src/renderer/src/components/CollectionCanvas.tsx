@@ -9,6 +9,7 @@ import type { CanvasHandle } from './Canvas'
 import type { CanvasLayout, DropTarget } from '../canvas/layout'
 import type { PageRef } from '../app/types'
 import type { DocEntry } from '../types'
+import type { CropRect } from './CropOverlay'
 
 interface CollectionCanvasProps {
   docs: DocEntry[]
@@ -37,6 +38,10 @@ interface CollectionCanvasProps {
   onRemoveDoc: (docId: string) => void
   onRenameDoc: (docId: string, name: string) => void
   onRotatePage: (docId: string, pageId: string, delta: 90 | -90) => void
+  cropTargetPageId: string | null
+  onStartCrop: (docId: string, pageId: string) => void
+  onCropFinished: (rect: CropRect) => void
+  onCropCancel: () => void
 }
 
 export function CollectionCanvas(props: CollectionCanvasProps): React.JSX.Element {
@@ -102,6 +107,10 @@ export function CollectionCanvas(props: CollectionCanvasProps): React.JSX.Elemen
         onPageDragEnd={props.onPageDragEnd}
         onAddPage={props.onAddPage}
         onRotatePage={props.onRotatePage}
+          cropTargetPageId={props.cropTargetPageId}
+          onStartCrop={props.onStartCrop}
+          onCropFinished={props.onCropFinished}
+          onCropCancel={props.onCropCancel}
       />
       {dropTarget?.kind === 'between' && (
         <div

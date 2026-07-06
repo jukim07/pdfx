@@ -1,5 +1,5 @@
 import { getDocument } from 'pdfjs-dist'
-import { findConverter, partitionPages, pullPages, readManifest, rotatePages, stripExtension } from '@pdfx/core'
+import { cropPages, findConverter, partitionPages, pullPages, readManifest, rotatePages, stripExtension } from '@pdfx/core'
 import type { ExportPage } from '@pdfx/core'
 import type { DocEntry, PageEntry, PdfSource } from '../types'
 
@@ -58,13 +58,13 @@ export async function importIntoDocs(filename: string, bytes: Uint8Array): Promi
 }
 
 export async function toExportPage(page: PageEntry): Promise<ExportPage> {
-  if (!page.rotation) {
+  if (!page.rotation && !page.cropBox) {
     return { sourceKey: page.source.id, bytes: page.source.bytes, pageIndex: page.pageIndex }
   }
   // Bake edits into a single-page PDF so buildPdf/buildPdfx copy the edited page.
-  // sourceKey must be unique per edited page: the baked bytes differ from the source doc.
   let bytes = await pullPages(page.source.bytes, String(page.pageIndex + 1))
-  bytes = await rotatePages(bytes, page.rotation)
+  if (page.rotation) bytes = await rotatePages(bytes, page.rotation)
+  if (page.cropBox) bytes = await cropPages(bytes, page.cropBox)
   return { sourceKey: page.id, bytes, pageIndex: 0 }
 }
 

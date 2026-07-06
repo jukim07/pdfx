@@ -1154,3 +1154,47 @@ body {
 .page-hover-actions button:hover {
   background: rgba(0, 0, 0, 0.8);
 }
+
+.crop-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.crop-dialog {
+  background: #2b2b2b;
+  color: #eee;
+  border-radius: 8px;
+  padding: 16px 20px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crop-dialog label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.crop-dialog input[type='text'] {
+  width: 90px;
+  margin-left: 6px;
+}
+
+.crop-dialog-error {
+  color: #ff8a80;
+  font-size: 12px;
+}
+
+.crop-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}

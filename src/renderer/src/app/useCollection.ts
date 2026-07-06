@@ -107,6 +107,33 @@ export function useCollection(flash: (message: string) => void) {
     setSelected({ docId: last.id, pageId: last.pages[last.pages.length - 1].id })
   }, [])
 
+  const applyCrop = useCallback(
+    (docId: string, pageIds: string[], rect: { x: number; y: number; width: number; height: number }) => {
+      setDocs((prev) =>
+        prev.map((doc) => {
+          if (doc.id !== docId) return doc
+          return {
+            ...doc,
+            pages: doc.pages.map((p) => {
+              if (!pageIds.includes(p.id)) return p
+              return {
+                ...p,
+                cropBox: {
+                  x: rect.x * p.width,
+                  // rect.y is from the top of the thumbnail; PDF user space is bottom-up
+                  y: (1 - rect.y - rect.height) * p.height,
+                  width: rect.width * p.width,
+                  height: rect.height * p.height
+                }
+              }
+            })
+          }
+        })
+      )
+    },
+    []
+  )
+
   return {
     docs,
     setDocs,
@@ -118,6 +145,7 @@ export function useCollection(flash: (message: string) => void) {
     removeDoc,
     renameDoc,
     rotatePage,
+    applyCrop,
     moveDoc,
     deletePage,
     copySelected,

@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import type { DocEntry } from '../types'
+import type { CropRect } from './CropOverlay'
 import { ADD_PAGE_WIDTH } from '../canvas/layout'
 import { AddPageGhost, GhostPage } from './DropGhost'
 import { PageCell } from './page-cell'
@@ -20,6 +21,10 @@ interface DocumentRowProps {
   onPageDragEnd: () => void
   onAddPage: (docId: string) => void
   onRotatePage: (docId: string, pageId: string, delta: 90 | -90) => void
+  cropTargetPageId: string | null
+  onStartCrop: (docId: string, pageId: string) => void
+  onCropFinished: (rect: CropRect) => void
+  onCropCancel: () => void
 }
 
 function DocumentRowImpl({
@@ -36,7 +41,11 @@ function DocumentRowImpl({
   onPageDragStart,
   onPageDragEnd,
   onAddPage,
-  onRotatePage
+  onRotatePage,
+  cropTargetPageId,
+  onStartCrop,
+  onCropFinished,
+  onCropCancel
 }: DocumentRowProps): React.JSX.Element {
   const { active, query, matchingDocIds, matchingPageIds, getOcrWords } = useFindState()
   const docDimmed = active && !matchingDocIds.has(doc.id)
@@ -74,6 +83,10 @@ function DocumentRowImpl({
         onPageDragStart={onPageDragStart}
         onPageDragEnd={onPageDragEnd}
         onRotatePage={onRotatePage}
+        cropActive={cropTargetPageId === page.id}
+        onStartCrop={onStartCrop}
+        onCropFinished={onCropFinished}
+        onCropCancel={onCropCancel}
       />
     )
     if (!collapsed) visible++

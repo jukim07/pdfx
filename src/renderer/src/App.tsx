@@ -15,6 +15,8 @@ import { useFind } from './app/useFind'
 import { useSearchIndex } from './search/useSearchIndex'
 import { FindProvider } from './search/FindContext'
 import { FindBar } from './components/FindBar'
+import { CropRangeDialog } from './components/CropRangeDialog'
+import type { CropRect } from './components/CropOverlay'
 
 const TOAST_MS = 4000
 
@@ -35,6 +37,21 @@ export default function App(): React.JSX.Element {
   const collection = useCollection(flash)
   const fullViewState = useFullView()
   const docs = collection.docs
+
+  const [cropTarget, setCropTarget] = useState<{ docId: string; pageId: string } | null>(null)
+  const [pendingCrop, setPendingCrop] = useState<{ docId: string; pageId: string; rect: CropRect } | null>(null)
+
+  const handleStartCrop = useCallback((docId: string, pageId: string) => {
+    setCropTarget({ docId, pageId })
+  }, [])
+
+  const handleCropFinished = useCallback(
+    (rect: CropRect) => {
+      if (cropTarget) setPendingCrop({ ...cropTarget, rect })
+      setCropTarget(null)
+    },
+    [cropTarget]
+  )
   const layout = useMemo(() => computeLayout(docs), [docs])
 
   const searchIndex = useSearchIndex(docs)
@@ -169,7 +186,28 @@ export default function App(): React.JSX.Element {
           onRemoveDoc={collection.removeDoc}
           onRenameDoc={collection.renameDoc}
           onRotatePage={collection.rotatePage}
+          cropTargetPageId={cropTarget?.pageId ?? null}
+          onStartCrop={handleStartCrop}
+          onCropFinished={handleCropFinished}
+          onCropCancel={() => setCropTarget(null)}
         />
+
+        {pendingCrop && (() => {
+          const doc = collection.docs.find((d) => d.id === pendingCrop.docId)
+          if (!doc) return null
+          const currentIndex = doc.pages.findIndex((p) => p.id === pendingCrop.pageId)
+          return (
+            <CropRangeDialog
+              pageCount={doc.pages.length}
+              currentIndex={Math.max(0, currentIndex)}
+              onApply={(indices) => {
+                collection.applyCrop(doc.id, indices.map((i) => doc.pages[i].id), pendingCrop.rect)
+                setPendingCrop(null)
+              }}
+              onCancel={() => setPendingCrop(null)}
+            />
+          )
+        })()}
 
         {fullView && fullViewDoc && (
           <FullView

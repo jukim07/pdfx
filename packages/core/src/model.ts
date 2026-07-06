@@ -1,4 +1,5 @@
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type { Box } from './ops/crop.js'
 
 export interface PdfSource {
   id: string
@@ -18,6 +19,7 @@ export interface PageEntry {
   width: number
   height: number
   rotation?: number // 0 | 90 | 180 | 270; undefined === 0
+  cropBox?: Box // PDF user-space units; undefined === uncropped
 }
 
 export interface DocEntry {
