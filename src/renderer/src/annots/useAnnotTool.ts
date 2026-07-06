@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react'
 import type { Annot } from '@pdfx/core'
 
-/** Active annotation drawing tool. 'none' means the overlay is inactive. */
-export type AnnotTool = 'none' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'text'
+/** Active annotation drawing tool. 'none' means the overlay is inactive.
+ * 'ink' is reserved for Phase 4b freehand; button exists but records nothing. */
+export type AnnotTool = 'none' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'text' | 'ink'
 
 export interface UseAnnotToolResult {
   tool: AnnotTool

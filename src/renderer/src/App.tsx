@@ -20,6 +20,7 @@ import { CropRangeDialog } from './components/CropRangeDialog'
 import type { CropRect } from './components/CropOverlay'
 import { useAnnotTool } from './annots/useAnnotTool'
 import type { Annot } from '@pdfx/core'
+import { loadSource } from './pdfx/source'
 
 const TOAST_MS = 4000
 
@@ -59,7 +60,48 @@ export default function App(): React.JSX.Element {
 
   const handleAnnotCommit = useCallback((a: Annot) => {
     annot.addDraft(a)
-  }, [annot])
+  }, [annot.addDraft])
+
+  // Save annotation drafts into the source PDF bytes, then reload the in-memory
+  // PdfSource so the next full-view open renders the persisted annotation.
+  const handleSaveAnnots = useCallback(async () => {
+    if (annot.drafts.length === 0 || !fullViewState.fullView) return
+    const docId = fullViewState.fullView.docId
+    const doc = collection.docsRef.current.find((d) => d.id === docId)
+    if (!doc || doc.pages.length === 0) return
+    const srcId = doc.pages[0].source.id
+    const srcBytes = doc.pages[0].source.bytes
+    setBusy(true)
+    try {
+      const newBytes = await window.api.writeAnnots(srcBytes, annot.drafts)
+      // Reload the PDF document proxy so pdfjs-dist can render the new annotations.
+      const { source: newSource, sizes } = await loadSource(newBytes)
+      collection.setDocs((prev) =>
+        prev.map((d) => {
+          if (d.id !== docId) return d
+          return {
+            ...d,
+            pages: d.pages.map((p) => {
+              if (p.source.id !== srcId) return p
+              return {
+                ...p,
+                source: newSource,
+                width: sizes[p.pageIndex]?.width ?? p.width,
+                height: sizes[p.pageIndex]?.height ?? p.height
+              }
+            })
+          }
+        })
+      )
+      annot.clearDrafts()
+      flash(`Annotations saved`)
+    } catch (err) {
+      console.error('Save annotations failed', err)
+      flash('Failed to save annotations')
+    } finally {
+      setBusy(false)
+    }
+  }, [annot.drafts, annot.clearDrafts, fullViewState.fullView, collection.docsRef, collection.setDocs, setBusy, flash])
 
   const layout = useMemo(() => computeLayout(docs), [docs])
 
@@ -184,6 +226,8 @@ export default function App(): React.JSX.Element {
           onExportZip={exportZip}
           annotTool={annot.tool}
           onAnnotTool={annot.setTool}
+          annotDraftCount={annot.drafts.length}
+          onSaveAnnots={() => void handleSaveAnnots()}
         />
 
         {find.open && (

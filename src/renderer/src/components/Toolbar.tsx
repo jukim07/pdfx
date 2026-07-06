@@ -13,6 +13,8 @@ interface ToolbarProps {
   onExportZip: () => void
   annotTool?: AnnotTool
   onAnnotTool?: (t: AnnotTool) => void
+  annotDraftCount?: number
+  onSaveAnnots?: () => void
 }
 
 const isMac = window.api.platform === 'darwin'
@@ -29,7 +31,9 @@ export function Toolbar({
   onExportPdf,
   onExportZip,
   annotTool = 'none',
-  onAnnotTool
+  onAnnotTool,
+  annotDraftCount = 0,
+  onSaveAnnots
 }: ToolbarProps): React.JSX.Element {
   return (
     <header className={`toolbar${isMac ? ' mac' : ''}`}>
@@ -112,7 +116,24 @@ export function Toolbar({
           >
             T
           </button>
+          <button
+            className="icon-btn"
+            title="Ink (coming in Phase 4b)"
+            disabled
+          >
+            I
+          </button>
         </div>
+      )}
+      {onSaveAnnots && (
+        <button
+          className="btn glass"
+          title="Commit annotation drafts into the PDF"
+          onClick={onSaveAnnots}
+          disabled={busy || annotDraftCount === 0}
+        >
+          Save Annots{annotDraftCount > 0 ? ` (${annotDraftCount})` : ''}
+        </button>
       )}
       <button className="btn glass" onClick={onOpen} disabled={busy}>
         Open
