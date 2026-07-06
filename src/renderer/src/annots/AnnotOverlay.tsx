@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react'
-import type { Annot, Quad, Rect } from '@pdfx/core'
+import type { Annot, Quad, Rect, RedactRegion } from '@pdfx/core'
 import type { PageEntry } from '../types'
 import type { AnnotTool } from './useAnnotTool'
 import { pctRectToPdf } from './geometry'
@@ -11,6 +11,8 @@ interface AnnotOverlayProps {
   onCommit: (a: Annot, sourceId: string) => void
   /** PNG bytes for the stamp tool; required when tool === 'stamp'. */
   stampPng?: Uint8Array
+  /** Called when a redact region is drawn; parent accumulates these as drafts. */
+  onRedactDraft?: (r: RedactRegion) => void
 }
 
 type DragState = { startX: number; startY: number; curX: number; curY: number }
@@ -28,7 +30,7 @@ function rectToQuad(r: Rect): Quad {
   }
 }
 
-export function AnnotOverlay({ page, tool, onCommit, stampPng }: AnnotOverlayProps): React.JSX.Element | null {
+export function AnnotOverlay({ page, tool, onCommit, stampPng, onRedactDraft }: AnnotOverlayProps): React.JSX.Element | null {
   const containerRef = useRef<HTMLDivElement>(null)
   // Mirror drag state in ref to avoid stale-closure bug on fast pointer up (same pattern as CropOverlay).
   const dragRef = useRef<DragState | null>(null)
@@ -80,6 +82,10 @@ export function AnnotOverlay({ page, tool, onCommit, stampPng }: AnnotOverlayPro
     const pdfRect = pctRectToPdf({ leftPct, topPct, wPct, hPct }, page.width, page.height)
 
     const sourceId = page.source.id
+    if (tool === 'redact') {
+      onRedactDraft?.({ page: page.pageIndex, rect: pdfRect })
+      return
+    }
     if (tool === 'stamp' && stampPng) {
       onCommit({
         type: 'stamp',
@@ -113,7 +119,7 @@ export function AnnotOverlay({ page, tool, onCommit, stampPng }: AnnotOverlayPro
         color: { r: 0, g: 0, b: 0 }
       }, sourceId)
     }
-  }, [toFrac, page, tool, stampPng, onCommit])
+  }, [toFrac, page, tool, stampPng, onCommit, onRedactDraft])
 
   if (tool === 'none') return null
 

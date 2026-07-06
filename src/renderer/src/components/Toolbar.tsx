@@ -1,4 +1,5 @@
 import type { AnnotTool } from '../annots/useAnnotTool'
+import type { RedactRegion } from '@pdfx/core'
 
 interface ToolbarProps {
   documentCount: number
@@ -17,6 +18,9 @@ interface ToolbarProps {
   onSaveAnnots?: () => void
   /** Opens the signature picker modal so the user can choose/draw a signature. */
   onOpenSignaturePicker?: () => void
+  redactDrafts?: RedactRegion[]
+  onApplyRedact?: () => void
+  onCancelRedact?: () => void
 }
 
 const isMac = window.api.platform === 'darwin'
@@ -36,8 +40,12 @@ export function Toolbar({
   onAnnotTool,
   annotDraftCount = 0,
   onSaveAnnots,
-  onOpenSignaturePicker
+  onOpenSignaturePicker,
+  redactDrafts,
+  onApplyRedact,
+  onCancelRedact
 }: ToolbarProps): React.JSX.Element {
+  const redactCount = redactDrafts?.length ?? 0
   return (
     <header className={`toolbar${isMac ? ' mac' : ''}`}>
       {documentCount > 0 && (
@@ -134,7 +142,34 @@ export function Toolbar({
           >
             ✍
           </button>
+          <button
+            className={`icon-btn${annotTool === 'redact' ? ' active' : ''}`}
+            title="Redact region"
+            onClick={() => onAnnotTool!(annotTool === 'redact' ? 'none' : 'redact')}
+          >
+            ▓
+          </button>
         </div>
+      )}
+      {annotTool === 'redact' && redactCount > 0 && (
+        <>
+          <button
+            className="btn glass"
+            title="Permanently redact marked regions"
+            onClick={onApplyRedact}
+            disabled={busy}
+          >
+            Apply Redact ({redactCount})
+          </button>
+          <button
+            className="btn glass"
+            title="Discard redact regions"
+            onClick={onCancelRedact}
+            disabled={busy}
+          >
+            Cancel
+          </button>
+        </>
       )}
       {onSaveAnnots && (
         <button

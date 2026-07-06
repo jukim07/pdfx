@@ -1,4 +1,4 @@
-import type { Annot } from '@pdfx/core'
+import type { Annot, RedactRegion } from '@pdfx/core'
 import type { DocEntry } from '../../types'
 import type { AnnotTool } from '../../annots/useAnnotTool'
 import type { View } from './geometry'
@@ -30,12 +30,14 @@ interface FullViewPagesProps {
   annotTool?: AnnotTool
   onAnnotCommit?: (a: Annot, sourceId: string) => void
   stampPng?: Uint8Array
+  redactDrafts?: RedactRegion[]
+  onRedactDraft?: (r: RedactRegion) => void
 }
 
 export function FullViewPages(props: FullViewPagesProps): React.JSX.Element {
   const { scrollRef, drag, draggedRef, docs, viewport, di, pi } = props
   const { view, fit, vw, vh, zoomed, interactive, animating, flip, flipTransition } = props
-  const { renderVersion, setView, resetView, applyZoom, runClose, annotTool, onAnnotCommit, stampPng } = props
+  const { renderVersion, setView, resetView, applyZoom, runClose, annotTool, onAnnotCommit, stampPng, redactDrafts, onRedactDraft } = props
 
   const { onPointerDown, onPointerMove, endDrag } = useFullViewDrag({
     drag,
@@ -85,6 +87,8 @@ export function FullViewPages(props: FullViewPagesProps): React.JSX.Element {
               annotTool={annotTool}
               onAnnotCommit={onAnnotCommit}
               stampPng={stampPng}
+              redactDrafts={redactDrafts}
+              onRedactDraft={onRedactDraft}
             />
           ))}
         </section>

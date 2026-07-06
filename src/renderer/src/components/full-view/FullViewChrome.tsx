@@ -1,4 +1,5 @@
 import type { AnnotTool } from '../../annots/useAnnotTool'
+import type { RedactRegion } from '@pdfx/core'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '../icons'
 import { isMac } from './geometry'
 
@@ -16,6 +17,9 @@ interface FullViewChromeProps {
   busy?: boolean
   /** Opens the signature picker modal so the user can choose/draw a signature. */
   onOpenSignaturePicker?: () => void
+  redactDrafts?: RedactRegion[]
+  onApplyRedact?: () => void
+  onCancelRedact?: () => void
 }
 
 export function FullViewChrome({
@@ -30,8 +34,12 @@ export function FullViewChrome({
   annotDraftCount = 0,
   onSaveAnnots,
   busy = false,
-  onOpenSignaturePicker
+  onOpenSignaturePicker,
+  redactDrafts,
+  onApplyRedact,
+  onCancelRedact
 }: FullViewChromeProps): React.JSX.Element {
+  const redactCount = redactDrafts?.length ?? 0
   return (
     <div className="full-chrome" style={{ opacity: chromeOpacity }}>
       <header className={`full-bar${isMac ? ' mac' : ''}`}>
@@ -84,7 +92,34 @@ export function FullViewChrome({
             >
               ✍
             </button>
+            <button
+              className={`icon-btn${annotTool === 'redact' ? ' active' : ''}`}
+              title="Redact region"
+              onClick={() => onAnnotTool(annotTool === 'redact' ? 'none' : 'redact')}
+            >
+              ▓
+            </button>
           </div>
+        )}
+        {annotTool === 'redact' && redactCount > 0 && (
+          <>
+            <button
+              className="btn glass full-bar-save-annots"
+              title="Permanently redact marked regions"
+              onClick={onApplyRedact}
+              disabled={busy}
+            >
+              Apply Redact ({redactCount})
+            </button>
+            <button
+              className="btn glass"
+              title="Discard redact regions"
+              onClick={onCancelRedact}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </>
         )}
         {onSaveAnnots && (
           <button

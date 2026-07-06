@@ -6,7 +6,9 @@ import type { OcrWord } from '../ocr/types'
 import type { Annot } from '@pdfx/core'
 import type { PageEntry } from '../types'
 import { AnnotOverlay } from '../annots/AnnotOverlay'
+import { RedactPreview } from '../annots/RedactPreview'
 import type { AnnotTool } from '../annots/useAnnotTool'
+import type { RedactRegion } from '@pdfx/core'
 
 interface PageViewProps {
   pdf: PDFDocumentProxy
@@ -28,6 +30,10 @@ interface PageViewProps {
   onAnnotCommit?: (a: Annot, sourceId: string) => void
   /** PNG bytes for the stamp tool; passed to AnnotOverlay when tool === 'stamp'. */
   stampPng?: Uint8Array
+  /** Accumulated redact region drafts for this doc; RedactPreview filters to this page. */
+  redactDrafts?: RedactRegion[]
+  /** Called when user draws a redact region on this page. */
+  onRedactDraft?: (r: RedactRegion) => void
 }
 
 function PageViewImpl({
@@ -44,7 +50,9 @@ function PageViewImpl({
   annotTool,
   pageEntry,
   onAnnotCommit,
-  stampPng
+  stampPng,
+  redactDrafts,
+  onRedactDraft
 }: PageViewProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const baseRef = useRef<HTMLCanvasElement>(null)
@@ -156,7 +164,11 @@ function PageViewImpl({
           tool={annotTool}
           onCommit={onAnnotCommit}
           stampPng={stampPng}
+          onRedactDraft={onRedactDraft}
         />
+      ) : null}
+      {pageEntry && redactDrafts && redactDrafts.some((d) => d.page === pageEntry.pageIndex) ? (
+        <RedactPreview page={pageEntry} drafts={redactDrafts} />
       ) : null}
     </div>
   )

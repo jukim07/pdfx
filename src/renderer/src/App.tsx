@@ -20,7 +20,7 @@ import { CropRangeDialog } from './components/CropRangeDialog'
 import type { CropRect } from './components/CropOverlay'
 import { useAnnotTool } from './annots/useAnnotTool'
 import { groupDraftsBySource } from './annots/groupDrafts'
-import type { Annot, StampAnnot } from '@pdfx/core'
+import type { Annot, StampAnnot, RedactRegion, RedactMode } from '@pdfx/core'
 import { loadSource } from './pdfx/source'
 import { SignaturePicker } from './annots/SignaturePicker'
 
@@ -165,6 +165,95 @@ export default function App(): React.JSX.Element {
     }
   }, [annot.drafts, annot.clearDraftsForSources, fullViewState.fullView, collection.docsRef, collection.setDocs, setBusy, flash])
 
+  // Permanently redact accumulated draft regions, then reload the affected source.
+  // Two-shot: first try 'black' (content-stream surgery); if StreamSurgeryError,
+  // prompt to fall back to 'rasterize' (page becomes an image, no selectable text).
+  const handleApplyRedact = useCallback(async () => {
+    if (annot.redactDrafts.length === 0 || !fullViewState.fullView) return
+    const ok = window.confirm(
+      `Permanently redact ${annot.redactDrafts.length} region(s)? ` +
+        `Text and images under these boxes will be REMOVED from the PDF. ` +
+        `This cannot be undone in the saved file.`
+    )
+    if (!ok) return
+
+    const docId = fullViewState.fullView.docId
+    const doc = collection.docsRef.current.find((d) => d.id === docId)
+    if (!doc || doc.pages.length === 0) return
+
+    // Group regions by source (same pattern as handleSaveAnnots).
+    const bySource = new Map<string, { source: (typeof doc.pages)[number]['source']; regions: RedactRegion[] }>()
+    for (const region of annot.redactDrafts) {
+      const page = doc.pages.find((p) => p.pageIndex === region.page)
+      if (!page) continue
+      const srcId = page.source.id
+      if (!bySource.has(srcId)) bySource.set(srcId, { source: page.source, regions: [] })
+      bySource.get(srcId)!.regions.push(region)
+    }
+
+    const applyBytes = async (srcId: string, source: { bytes: Uint8Array; id: string }, regions: RedactRegion[], mode: RedactMode) => {
+      const result = await window.api.redactDoc(source.bytes, regions, mode)
+      if ('surgeryFailed' in result) {
+        return result as { surgeryFailed: true; page: number }
+      }
+      const newBytes = result as Uint8Array
+      const { source: newSource, sizes } = await loadSource(newBytes)
+      collection.setDocs((prev) =>
+        prev.map((d) => {
+          if (d.id !== docId) return d
+          return {
+            ...d,
+            pages: d.pages.map((p) => {
+              if (p.source.id !== srcId) return p
+              return {
+                ...p,
+                source: newSource,
+                width: sizes[p.pageIndex]?.width ?? p.width,
+                height: sizes[p.pageIndex]?.height ?? p.height
+              }
+            })
+          }
+        })
+      )
+      return null
+    }
+
+    setBusy(true)
+    for (const [srcId, { source, regions }] of bySource) {
+      try {
+        const err = await applyBytes(srcId, source, regions, 'black')
+        if (err) {
+          setBusy(false)
+          const retry = window.confirm(
+            `Precise removal failed on page ${err.page + 1}. ` +
+              `Rasterize the affected page(s) instead? ` +
+              `(The page becomes an image; text will no longer be selectable.)`
+          )
+          if (!retry) return
+          setBusy(true)
+          const err2 = await applyBytes(srcId, source, regions, 'rasterize')
+          if (err2) {
+            setBusy(false)
+            flash('Rasterize fallback failed')
+            return
+          }
+        }
+      } catch (err) {
+        console.error('Redact failed', err)
+        setBusy(false)
+        flash('Redaction failed')
+        return
+      }
+    }
+    annot.clearRedactDrafts()
+    setBusy(false)
+    flash('Redacted')
+  }, [annot.redactDrafts, annot.clearRedactDrafts, fullViewState.fullView, collection.docsRef, collection.setDocs, setBusy, flash])
+
+  const handleCancelRedact = useCallback(() => {
+    annot.clearRedactDrafts()
+  }, [annot.clearRedactDrafts])
+
   const layout = useMemo(() => computeLayout(docs), [docs])
 
   const searchIndex = useSearchIndex(docs)
@@ -296,6 +385,9 @@ export default function App(): React.JSX.Element {
           annotDraftCount={annot.drafts.length}
           onSaveAnnots={() => void handleSaveAnnots()}
           onOpenSignaturePicker={handleOpenSignaturePicker}
+          redactDrafts={annot.redactDrafts}
+          onApplyRedact={() => void handleApplyRedact()}
+          onCancelRedact={handleCancelRedact}
         />
 
         {find.open && (
@@ -377,6 +469,10 @@ export default function App(): React.JSX.Element {
             busy={busy}
             stampPng={stampPng ?? undefined}
             onOpenSignaturePicker={handleOpenSignaturePicker}
+            redactDrafts={annot.redactDrafts}
+            onRedactDraft={annot.addRedactDraft}
+            onApplyRedact={() => void handleApplyRedact()}
+            onCancelRedact={handleCancelRedact}
           />
         )}
 

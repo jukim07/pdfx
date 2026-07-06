@@ -1419,3 +1419,23 @@ body {
   height: 82px;
   justify-content: center;
 }
+
+/* Redact tool preview overlays */
+.redact-preview-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.redact-preview-box {
+  position: absolute;
+  border: 2px solid #d32f2f;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(211, 47, 47, 0.25),
+    rgba(211, 47, 47, 0.25) 6px,
+    rgba(211, 47, 47, 0.45) 6px,
+    rgba(211, 47, 47, 0.45) 12px
+  );
+}

@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react'
-import type { Annot } from '@pdfx/core'
+import type { Annot, RedactRegion } from '@pdfx/core'
 
 /** Active annotation drawing tool. 'none' means the overlay is inactive.
  * 'ink' is reserved for Phase 4b freehand; button exists but records nothing.
- * 'stamp' places a stored-signature PNG on the page. */
-export type AnnotTool = 'none' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'text' | 'ink' | 'stamp'
+ * 'stamp' places a stored-signature PNG on the page.
+ * 'redact' draws redaction regions that are committed via Apply, not inline. */
+export type AnnotTool = 'none' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'text' | 'ink' | 'stamp' | 'redact'
 
 /** Renderer-local draft record: pairs an annotation with the source PDF it belongs to.
  * sourceId mirrors PdfSource.id so save can group drafts by source without
@@ -20,11 +21,15 @@ export interface UseAnnotToolResult {
   drafts: DraftAnnot[]
   addDraft: (a: Annot, sourceId: string) => void
   clearDraftsForSources: (sourceIds: Set<string>) => void
+  redactDrafts: RedactRegion[]
+  addRedactDraft: (r: RedactRegion) => void
+  clearRedactDrafts: () => void
 }
 
 export function useAnnotTool(): UseAnnotToolResult {
   const [tool, setTool] = useState<AnnotTool>('none')
   const [drafts, setDrafts] = useState<DraftAnnot[]>([])
+  const [redactDrafts, setRedactDrafts] = useState<RedactRegion[]>([])
 
   const addDraft = useCallback(
     (a: Annot, sourceId: string) => setDrafts((prev) => [...prev, { annot: a, sourceId }]),
@@ -38,5 +43,8 @@ export function useAnnotTool(): UseAnnotToolResult {
     []
   )
 
-  return { tool, setTool, drafts, addDraft, clearDraftsForSources }
+  const addRedactDraft = useCallback((r: RedactRegion) => setRedactDrafts((d) => [...d, r]), [])
+  const clearRedactDrafts = useCallback(() => setRedactDrafts([]), [])
+
+  return { tool, setTool, drafts, addDraft, clearDraftsForSources, redactDrafts, addRedactDraft, clearRedactDrafts }
 }

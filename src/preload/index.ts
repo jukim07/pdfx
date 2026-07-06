@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annot, StampAnnot } from '@pdfx/core'
+import type { Annot, StampAnnot, RedactRegion, RedactMode } from '@pdfx/core'
 
 export interface OpenedFile {
   name: string
@@ -52,6 +52,12 @@ const api = {
     ipcRenderer.invoke('pdfx:write-annots', bytes, annots),
   writeStampAnnots: (bytes: Uint8Array, stamps: StampAnnot[]): Promise<Uint8Array> =>
     ipcRenderer.invoke('pdfx:write-stamp-annots', bytes, stamps),
+  redactDoc: (
+    bytes: Uint8Array,
+    regions: RedactRegion[],
+    mode: RedactMode
+  ): Promise<Uint8Array | { surgeryFailed: true; page: number }> =>
+    ipcRenderer.invoke('pdfx:redact', bytes, regions, mode),
   signatures: {
     list: (): Promise<StoredSignature[]> => ipcRenderer.invoke('pdfx:sig-list'),
     add: (name: string, png: Uint8Array): Promise<StoredSignature> =>

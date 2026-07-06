@@ -8,8 +8,8 @@ import { clipboardFilePaths } from './clipboard'
 import { readResource } from './resource'
 import { getMainWindow, setRendererReady, sendOpenPaths } from './window'
 import { nextOpenPaths, nextSavePath, testModeEnabled } from './test-mode'
-import { writeAnnots, writeStampAnnots } from '@pdfx/core'
-import type { Annot, StampAnnot } from '@pdfx/core'
+import { writeAnnots, writeStampAnnots, redactRegions, StreamSurgeryError } from '@pdfx/core'
+import type { Annot, StampAnnot, RedactRegion, RedactMode } from '@pdfx/core'
 import { SignatureStore } from './signature-store'
 
 const MAX_WRITE_BYTES = 1024 * 1024 * 1024 // 1 GiB cap on a single IPC write
@@ -166,6 +166,28 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
         throw new Error('write-stamp-annots: refusing invalid payload')
       }
       return writeStampAnnots(bytes, stamps)
+    }
+  )
+
+  ipcMain.handle(
+    'pdfx:redact',
+    async (
+      _event,
+      bytes: Uint8Array,
+      regions: RedactRegion[],
+      mode: RedactMode
+    ): Promise<Uint8Array | { surgeryFailed: true; page: number }> => {
+      if (!ArrayBuffer.isView(bytes) || bytes.byteLength > MAX_WRITE_BYTES) {
+        throw new Error('pdfx:redact: refusing invalid payload')
+      }
+      try {
+        return await redactRegions(bytes, regions, { mode })
+      } catch (err) {
+        if (err instanceof StreamSurgeryError) {
+          return { surgeryFailed: true, page: err.page }
+        }
+        throw err
+      }
     }
   )
 }

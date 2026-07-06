@@ -1,4 +1,4 @@
-import type { Annot } from '@pdfx/core'
+import type { Annot, RedactRegion } from '@pdfx/core'
 import type { DocEntry } from '../types'
 import type { AnnotTool } from '../annots/useAnnotTool'
 import type { Rect } from './full-view/geometry'
@@ -25,6 +25,10 @@ interface FullViewProps {
   busy?: boolean
   stampPng?: Uint8Array
   onOpenSignaturePicker?: () => void
+  redactDrafts?: RedactRegion[]
+  onRedactDraft?: (r: RedactRegion) => void
+  onApplyRedact?: () => void
+  onCancelRedact?: () => void
 }
 
 export function FullView({
@@ -41,7 +45,11 @@ export function FullView({
   onSaveAnnots,
   busy,
   stampPng,
-  onOpenSignaturePicker
+  onOpenSignaturePicker,
+  redactDrafts,
+  onRedactDraft,
+  onApplyRedact,
+  onCancelRedact
 }: FullViewProps): React.JSX.Element {
   const s = useFullViewState(docs, startDocId, startPageId, originRect)
 
@@ -127,6 +135,8 @@ export function FullView({
         annotTool={annotTool}
         onAnnotCommit={onAnnotCommit}
         stampPng={stampPng}
+        redactDrafts={redactDrafts}
+        onRedactDraft={onRedactDraft}
       />
       <FullViewChrome
         chromeOpacity={chromeOpacity}
@@ -141,6 +151,9 @@ export function FullView({
         onSaveAnnots={onSaveAnnots}
         busy={busy}
         onOpenSignaturePicker={onOpenSignaturePicker}
+        redactDrafts={redactDrafts}
+        onApplyRedact={onApplyRedact}
+        onCancelRedact={onCancelRedact}
       />
     </div>
   )
