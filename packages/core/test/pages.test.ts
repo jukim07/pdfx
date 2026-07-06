@@ -57,6 +57,14 @@ describe('duplicatePages', () => {
     const out = await duplicatePages(five, '2')
     expect(await widths(out)).toEqual([100, 101, 101, 102, 103, 104])
   })
+
+  // Item 5: multi-range spec — copies appear per spec order, originals intact
+  it('duplicates multi-range "1,3-4" on a 5-page doc', async () => {
+    const out = await duplicatePages(five, '1,3-4')
+    // spec selects pages 1,3,4 (0-based: 0,2,3); each copy lands after its original
+    // result: p1,p1,p2,p3,p3,p4,p4,p5 → widths: 100,100,101,102,102,103,103,104
+    expect(await widths(out)).toEqual([100, 100, 101, 102, 102, 103, 103, 104])
+  })
 })
 
 describe('pullPages', () => {
@@ -87,5 +95,22 @@ describe('insertPages', () => {
     const donor = await makePdf(1)
     await expect(insertPages(five, donor, 0)).rejects.toThrow()
     await expect(insertPages(five, donor, 7)).rejects.toThrow()
+  })
+
+  // Item 5: empty-donor cases — pin actual contract
+  it('throws when donor spec selects no pages', async () => {
+    const donor = await makePdf(2)
+    // range "99" selects nothing from a 2-page donor → indicesFor throws
+    await expect(insertPages(five, donor, 1, '99')).rejects.toThrow()
+  })
+
+  it('inserts blank page when donor is a pdf-lib-created empty doc (pdf-lib always has ≥1 page)', async () => {
+    // pdf-lib PDFDocument.create().save() yields a 1-page doc when re-loaded
+    // (pdf-lib cannot represent a truly 0-page PDF); the 1 blank page is inserted
+    const emptyDoc = await PDFDocument.create()
+    const emptyBytes = await emptyDoc.save()
+    const out = await insertPages(five, emptyBytes, 1)
+    const reloaded = await PDFDocument.load(out)
+    expect(reloaded.getPageCount()).toBe(6)
   })
 })
