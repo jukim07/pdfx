@@ -23,6 +23,8 @@ interface FullViewProps {
   annotDraftCount?: number
   onSaveAnnots?: () => void
   busy?: boolean
+  stampPng?: Uint8Array
+  onOpenSignaturePicker?: () => void
 }
 
 export function FullView({
@@ -37,7 +39,9 @@ export function FullView({
   onAnnotCommit,
   annotDraftCount,
   onSaveAnnots,
-  busy
+  busy,
+  stampPng,
+  onOpenSignaturePicker
 }: FullViewProps): React.JSX.Element {
   const s = useFullViewState(docs, startDocId, startPageId, originRect)
 
@@ -122,6 +126,7 @@ export function FullView({
         runClose={controls.runClose}
         annotTool={annotTool}
         onAnnotCommit={onAnnotCommit}
+        stampPng={stampPng}
       />
       <FullViewChrome
         chromeOpacity={chromeOpacity}
@@ -135,6 +140,7 @@ export function FullView({
         annotDraftCount={annotDraftCount}
         onSaveAnnots={onSaveAnnots}
         busy={busy}
+        onOpenSignaturePicker={onOpenSignaturePicker}
       />
     </div>
   )

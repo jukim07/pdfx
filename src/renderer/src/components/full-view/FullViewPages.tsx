@@ -29,12 +29,13 @@ interface FullViewPagesProps {
   runClose: () => void
   annotTool?: AnnotTool
   onAnnotCommit?: (a: Annot, sourceId: string) => void
+  stampPng?: Uint8Array
 }
 
 export function FullViewPages(props: FullViewPagesProps): React.JSX.Element {
   const { scrollRef, drag, draggedRef, docs, viewport, di, pi } = props
   const { view, fit, vw, vh, zoomed, interactive, animating, flip, flipTransition } = props
-  const { renderVersion, setView, resetView, applyZoom, runClose, annotTool, onAnnotCommit } = props
+  const { renderVersion, setView, resetView, applyZoom, runClose, annotTool, onAnnotCommit, stampPng } = props
 
   const { onPointerDown, onPointerMove, endDrag } = useFullViewDrag({
     drag,
@@ -83,6 +84,7 @@ export function FullViewPages(props: FullViewPagesProps): React.JSX.Element {
               applyZoom={applyZoom}
               annotTool={annotTool}
               onAnnotCommit={onAnnotCommit}
+              stampPng={stampPng}
             />
           ))}
         </section>

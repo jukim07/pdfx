@@ -26,6 +26,8 @@ interface PageViewProps {
   /** Called when user finishes drawing an annotation on this page.
    *  sourceId is the PdfSource.id of the page so callers can group drafts by source. */
   onAnnotCommit?: (a: Annot, sourceId: string) => void
+  /** PNG bytes for the stamp tool; passed to AnnotOverlay when tool === 'stamp'. */
+  stampPng?: Uint8Array
 }
 
 function PageViewImpl({
@@ -41,7 +43,8 @@ function PageViewImpl({
   ocrWords,
   annotTool,
   pageEntry,
-  onAnnotCommit
+  onAnnotCommit,
+  stampPng
 }: PageViewProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const baseRef = useRef<HTMLCanvasElement>(null)
@@ -152,6 +155,7 @@ function PageViewImpl({
           page={pageEntry}
           tool={annotTool}
           onCommit={onAnnotCommit}
+          stampPng={stampPng}
         />
       ) : null}
     </div>

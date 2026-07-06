@@ -15,6 +15,8 @@ interface ToolbarProps {
   onAnnotTool?: (t: AnnotTool) => void
   annotDraftCount?: number
   onSaveAnnots?: () => void
+  /** Opens the signature picker modal so the user can choose/draw a signature. */
+  onOpenSignaturePicker?: () => void
 }
 
 const isMac = window.api.platform === 'darwin'
@@ -33,7 +35,8 @@ export function Toolbar({
   annotTool = 'none',
   onAnnotTool,
   annotDraftCount = 0,
-  onSaveAnnots
+  onSaveAnnots,
+  onOpenSignaturePicker
 }: ToolbarProps): React.JSX.Element {
   return (
     <header className={`toolbar${isMac ? ' mac' : ''}`}>
@@ -122,6 +125,14 @@ export function Toolbar({
             disabled
           >
             I
+          </button>
+          <button
+            className={`icon-btn${annotTool === 'stamp' ? ' active' : ''}`}
+            title="Stamp signature"
+            onClick={onOpenSignaturePicker}
+            disabled={!onOpenSignaturePicker}
+          >
+            ✍
           </button>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { Annot } from '@pdfx/core'
+import type { Annot, StampAnnot } from '@pdfx/core'
 
 export interface OpenedFile {
   name: string
@@ -16,6 +16,13 @@ export type MenuAction = 'open' | 'export-pdfx' | 'export-pdf' | 'export-zip'
 export interface SaveFilter {
   name: string
   extensions: string[]
+}
+
+export interface StoredSignature {
+  id: string
+  name: string
+  pngBase64: string
+  createdAt: number
 }
 
 const api = {
@@ -43,6 +50,14 @@ const api = {
     ipcRenderer.invoke('pdfx:write-file', path, data),
   writeAnnots: (bytes: Uint8Array, annots: Annot[]): Promise<Uint8Array> =>
     ipcRenderer.invoke('pdfx:write-annots', bytes, annots),
+  writeStampAnnots: (bytes: Uint8Array, stamps: StampAnnot[]): Promise<Uint8Array> =>
+    ipcRenderer.invoke('pdfx:write-stamp-annots', bytes, stamps),
+  signatures: {
+    list: (): Promise<StoredSignature[]> => ipcRenderer.invoke('pdfx:sig-list'),
+    add: (name: string, png: Uint8Array): Promise<StoredSignature> =>
+      ipcRenderer.invoke('pdfx:sig-add', name, png),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke('pdfx:sig-remove', id)
+  },
   openFiles: (): Promise<OpenedFile[]> => ipcRenderer.invoke('pdfx:open-files'),
   onFilesOpened: (callback: (files: OpenedFile[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, files: OpenedFile[]): void =>

@@ -14,6 +14,8 @@ interface FullViewChromeProps {
   annotDraftCount?: number
   onSaveAnnots?: () => void
   busy?: boolean
+  /** Opens the signature picker modal so the user can choose/draw a signature. */
+  onOpenSignaturePicker?: () => void
 }
 
 export function FullViewChrome({
@@ -27,7 +29,8 @@ export function FullViewChrome({
   onAnnotTool,
   annotDraftCount = 0,
   onSaveAnnots,
-  busy = false
+  busy = false,
+  onOpenSignaturePicker
 }: FullViewChromeProps): React.JSX.Element {
   return (
     <div className="full-chrome" style={{ opacity: chromeOpacity }}>
@@ -72,6 +75,14 @@ export function FullViewChrome({
             </button>
             <button className="icon-btn" title="Ink (coming in Phase 4b)" disabled>
               I
+            </button>
+            <button
+              className={`icon-btn${annotTool === 'stamp' ? ' active' : ''}`}
+              title="Stamp signature"
+              onClick={onOpenSignaturePicker}
+              disabled={!onOpenSignaturePicker}
+            >
+              ✍
             </button>
           </div>
         )}

@@ -2,8 +2,9 @@ import { useState, useCallback } from 'react'
 import type { Annot } from '@pdfx/core'
 
 /** Active annotation drawing tool. 'none' means the overlay is inactive.
- * 'ink' is reserved for Phase 4b freehand; button exists but records nothing. */
-export type AnnotTool = 'none' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'text' | 'ink'
+ * 'ink' is reserved for Phase 4b freehand; button exists but records nothing.
+ * 'stamp' places a stored-signature PNG on the page. */
+export type AnnotTool = 'none' | 'highlight' | 'underline' | 'strikeout' | 'note' | 'text' | 'ink' | 'stamp'
 
 /** Renderer-local draft record: pairs an annotation with the source PDF it belongs to.
  * sourceId mirrors PdfSource.id so save can group drafts by source without

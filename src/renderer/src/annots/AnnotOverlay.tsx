@@ -9,6 +9,8 @@ interface AnnotOverlayProps {
   tool: AnnotTool
   /** Called with the finished annot and the id of the source PDF the page belongs to. */
   onCommit: (a: Annot, sourceId: string) => void
+  /** PNG bytes for the stamp tool; required when tool === 'stamp'. */
+  stampPng?: Uint8Array
 }
 
 type DragState = { startX: number; startY: number; curX: number; curY: number }
@@ -26,7 +28,7 @@ function rectToQuad(r: Rect): Quad {
   }
 }
 
-export function AnnotOverlay({ page, tool, onCommit }: AnnotOverlayProps): React.JSX.Element | null {
+export function AnnotOverlay({ page, tool, onCommit, stampPng }: AnnotOverlayProps): React.JSX.Element | null {
   const containerRef = useRef<HTMLDivElement>(null)
   // Mirror drag state in ref to avoid stale-closure bug on fast pointer up (same pattern as CropOverlay).
   const dragRef = useRef<DragState | null>(null)
@@ -78,7 +80,14 @@ export function AnnotOverlay({ page, tool, onCommit }: AnnotOverlayProps): React
     const pdfRect = pctRectToPdf({ leftPct, topPct, wPct, hPct }, page.width, page.height)
 
     const sourceId = page.source.id
-    if (tool === 'highlight' || tool === 'underline' || tool === 'strikeout') {
+    if (tool === 'stamp' && stampPng) {
+      onCommit({
+        type: 'stamp',
+        page: page.pageIndex,
+        rect: pdfRect,
+        png: stampPng
+      }, sourceId)
+    } else if (tool === 'highlight' || tool === 'underline' || tool === 'strikeout') {
       const quad = rectToQuad(pdfRect)
       onCommit({
         type: tool,
@@ -104,7 +113,7 @@ export function AnnotOverlay({ page, tool, onCommit }: AnnotOverlayProps): React
         color: { r: 0, g: 0, b: 0 }
       }, sourceId)
     }
-  }, [toFrac, page, tool, onCommit])
+  }, [toFrac, page, tool, stampPng, onCommit])
 
   if (tool === 'none') return null
 

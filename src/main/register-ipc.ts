@@ -8,10 +8,15 @@ import { clipboardFilePaths } from './clipboard'
 import { readResource } from './resource'
 import { getMainWindow, setRendererReady, sendOpenPaths } from './window'
 import { nextOpenPaths, nextSavePath, testModeEnabled } from './test-mode'
-import { writeAnnots } from '@pdfx/core'
-import type { Annot } from '@pdfx/core'
+import { writeAnnots, writeStampAnnots } from '@pdfx/core'
+import type { Annot, StampAnnot } from '@pdfx/core'
+import { app } from 'electron'
+import { SignatureStore } from './signature-store'
 
 const MAX_WRITE_BYTES = 1024 * 1024 * 1024 // 1 GiB cap on a single IPC write
+
+// One store instance shared across IPC lifetime; userData dir is stable after app ready.
+const sigStore = new SignatureStore(app.getPath('userData'))
 
 export function registerIpc(getPending: () => string[], clearPending: () => void): void {
   ipcMain.handle('pdfx:renderer-ready', async () => {
@@ -140,4 +145,28 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
     if (result.canceled) return []
     return readFiles(result.filePaths)
   })
+
+  // Signature store handlers
+  ipcMain.handle('pdfx:sig-list', () => sigStore.list())
+
+  ipcMain.handle('pdfx:sig-add', (_event, name: string, png: Uint8Array) => {
+    if (typeof name !== 'string' || !name) throw new Error('sig-add: invalid name')
+    if (!ArrayBuffer.isView(png) || png.byteLength === 0) throw new Error('sig-add: invalid png')
+    return sigStore.add(name, png)
+  })
+
+  ipcMain.handle('pdfx:sig-remove', (_event, id: string) => {
+    if (typeof id !== 'string' || !id) throw new Error('sig-remove: invalid id')
+    sigStore.remove(id)
+  })
+
+  ipcMain.handle(
+    'pdfx:write-stamp-annots',
+    async (_event, bytes: Uint8Array, stamps: StampAnnot[]): Promise<Uint8Array> => {
+      if (!ArrayBuffer.isView(bytes) || bytes.byteLength > MAX_WRITE_BYTES) {
+        throw new Error('write-stamp-annots: refusing invalid payload')
+      }
+      return writeStampAnnots(bytes, stamps)
+    }
+  )
 }

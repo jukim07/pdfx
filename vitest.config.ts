@@ -8,7 +8,7 @@ export default defineConfig({
     }
   },
   test: {
-    include: ['src/renderer/src/**/*.test.ts'],
+    include: ['src/renderer/src/**/*.test.ts', 'src/main/**/*.test.ts'],
     testTimeout: 30_000
   }
 })

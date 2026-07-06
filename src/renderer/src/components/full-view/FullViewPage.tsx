@@ -21,11 +21,12 @@ interface FullViewPageProps {
   applyZoom: (nextZoom: (z: number) => number, focal?: { x: number; y: number }) => void
   annotTool?: AnnotTool
   onAnnotCommit?: (a: Annot, sourceId: string) => void
+  stampPng?: Uint8Array
 }
 
 export function FullViewPage(props: FullViewPageProps): React.JSX.Element {
   const { page: p, viewport, isCurrent, view, zoomed, interactive, animating } = props
-  const { flip, flipTransition, renderVersion, resetView, applyZoom, annotTool, onAnnotCommit } = props
+  const { flip, flipTransition, renderVersion, resetView, applyZoom, annotTool, onAnnotCommit, stampPng } = props
 
   const { active, query, matchingPageIds, getOcrWords } = useFindState()
   const highlight = active && isCurrent && matchingPageIds.has(p.id)
@@ -76,6 +77,7 @@ export function FullViewPage(props: FullViewPageProps): React.JSX.Element {
           annotTool={isCurrent ? annotTool : undefined}
           pageEntry={isCurrent ? p : undefined}
           onAnnotCommit={isCurrent ? onAnnotCommit : undefined}
+          stampPng={isCurrent ? stampPng : undefined}
         />
       </div>
     </div>

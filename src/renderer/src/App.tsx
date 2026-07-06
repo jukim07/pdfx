@@ -20,8 +20,9 @@ import { CropRangeDialog } from './components/CropRangeDialog'
 import type { CropRect } from './components/CropOverlay'
 import { useAnnotTool } from './annots/useAnnotTool'
 import { groupDraftsBySource } from './annots/groupDrafts'
-import type { Annot } from '@pdfx/core'
+import type { Annot, StampAnnot } from '@pdfx/core'
 import { loadSource } from './pdfx/source'
+import { SignaturePicker } from './annots/SignaturePicker'
 
 const TOAST_MS = 4000
 
@@ -58,10 +59,31 @@ export default function App(): React.JSX.Element {
     [cropTarget]
   )
   const annot = useAnnotTool()
+  // stampPng: PNG bytes currently loaded in placement mode (null = no active stamp).
+  const [stampPng, setStampPng] = useState<Uint8Array | null>(null)
+  const [showSignaturePicker, setShowSignaturePicker] = useState(false)
+
+  const handleOpenSignaturePicker = useCallback(() => {
+    setShowSignaturePicker(true)
+  }, [])
+
+  const handlePickSignature = useCallback(
+    (png: Uint8Array) => {
+      setStampPng(png)
+      setShowSignaturePicker(false)
+      annot.setTool('stamp')
+    },
+    [annot.setTool]
+  )
 
   const handleAnnotCommit = useCallback((a: Annot, sourceId: string) => {
     annot.addDraft(a, sourceId)
-  }, [annot.addDraft])
+    // After placing a stamp, exit placement mode so the user doesn't stamp again accidentally.
+    if (a.type === 'stamp') {
+      annot.setTool('none')
+      setStampPng(null)
+    }
+  }, [annot.addDraft, annot.setTool])
 
   // Save annotation drafts into each affected source PDF, then reload the in-memory
   // PdfSource objects so pdfjs-dist renders persisted annotations on next full-view open.
@@ -85,8 +107,17 @@ export default function App(): React.JSX.Element {
 
     for (const [srcId, { source, annots }] of draftsBySource) {
       try {
-        const newBytes = await window.api.writeAnnots(source.bytes, annots)
-        const { source: newSource, sizes } = await loadSource(newBytes)
+        // Split stamp vs regular annots; write regular first, then stamps on the result.
+        const regularAnnots = annots.filter((a) => a.type !== 'stamp')
+        const stampAnnots = annots.filter((a): a is StampAnnot => a.type === 'stamp')
+        let workingBytes = source.bytes
+        if (regularAnnots.length > 0) {
+          workingBytes = await window.api.writeAnnots(workingBytes, regularAnnots)
+        }
+        if (stampAnnots.length > 0) {
+          workingBytes = await window.api.writeStampAnnots(workingBytes, stampAnnots)
+        }
+        const { source: newSource, sizes } = await loadSource(workingBytes)
         collection.setDocs((prev) =>
           prev.map((d) => {
             if (d.id !== docId) return d
@@ -254,6 +285,7 @@ export default function App(): React.JSX.Element {
           onAnnotTool={annot.setTool}
           annotDraftCount={annot.drafts.length}
           onSaveAnnots={() => void handleSaveAnnots()}
+          onOpenSignaturePicker={handleOpenSignaturePicker}
         />
 
         {find.open && (
@@ -333,6 +365,15 @@ export default function App(): React.JSX.Element {
             annotDraftCount={annot.drafts.length}
             onSaveAnnots={() => void handleSaveAnnots()}
             busy={busy}
+            stampPng={stampPng ?? undefined}
+            onOpenSignaturePicker={handleOpenSignaturePicker}
+          />
+        )}
+
+        {showSignaturePicker && (
+          <SignaturePicker
+            onPick={handlePickSignature}
+            onClose={() => setShowSignaturePicker(false)}
           />
         )}
 
