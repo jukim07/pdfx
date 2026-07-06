@@ -3,6 +3,9 @@ import {
   PDFName,
   PDFDict,
   PDFRef,
+  PDFRawStream,
+  PDFNumber,
+  PDFArray,
   PDFOperator,
   PDFOperatorNames,
   StandardFonts,
@@ -40,7 +43,8 @@ function quadBox(quads: Quad[]): { x: number; y: number; w: number; h: number } 
  *   note       → small filled square at rect origin (icon flattened as coloured marker)
  *   text (FreeText) → drawText at rect origin with annot fontSize
  *   ink        → raw PDF moveTo/lineTo/stroke per path segment (no SVG y-flip)
- *   stamp      → accepted-deferred (Phase 4b); no draw, /Annots still removed
+ *   stamp      → /AP /N Form XObject copied into page resources, invoked with
+ *                the PDF §12.5.5 appearance-to-rect CTM (BBox→rect, /Matrix-aware)
  */
 export async function flattenAnnots(bytes: Uint8Array): Promise<Uint8Array> {
   const pageAnnots = await readAnnots(bytes)
@@ -161,12 +165,15 @@ export async function flattenAnnots(bytes: Uint8Array): Promise<Uint8Array> {
           // A stamp's only visual is its /AP /N Form XObject — nothing is ever
           // drawn into page content by stamp.ts; the appearance stream IS the
           // visual.  Copy that stream into the page's /Resources /XObject under
-          // a fresh name, then emit  q <w> 0 0 <h> <x> <y> cm /<name> Do Q.
+          // a fresh name, then emit  q <sx> 0 0 <sy> <tx> <ty> cm /<name> Do Q.
           //
-          // Placement derivation: stamp.ts builds BBox=[0,0,w,h] for the Form
-          // XObject (see packages/core/src/annots/stamp.ts).  To map that box
-          // to the annotation's page rect [x, y, x+w, y+h] we need a CTM that
-          // scales and translates:  [w 0 0 h x y] (no rotation, no y-flip).
+          // CTM derivation (PDF §12.5.5 appearance-to-rect mapping):
+          //   1. Read BBox [bx0,by0,bx1,by1] and optional /Matrix (default I).
+          //   2. Transform BBox corners through /Matrix; take axis-aligned bounds
+          //      [tx0,ty0,tx1,ty1].
+          //   3. sx = rect.w/(tx1-tx0),  sy = rect.h/(ty1-ty0).
+          //   4. CTM = translate(rect.x - tx0·sx, rect.y - ty0·sy) ∘ scale(sx,sy).
+          // For our stamps: BBox=[0,0,w,h], no /Matrix → sx=sy=1, CTM=translate(x,y).
           const pageNode = page.node
           const annotsArr = pageNode.Annots()
           if (annotsArr) {
@@ -198,21 +205,66 @@ export async function flattenAnnots(bytes: Uint8Array): Promise<Uint8Array> {
               }
 
               // Pick a name that won't clash with existing XObjects on this page.
+              // Form XObjects are streams, not PDFDicts — use a type-agnostic
+              // key-existence check instead of lookupMaybe(..., PDFDict).
               let nameIdx = 0
               let xName: string
               do {
                 xName = `PdfxStamp${nameIdx++}`
-              } while (xobjDict.lookupMaybe(PDFName.of(xName), PDFDict) !== undefined)
+              } while (xobjDict.has(PDFName.of(xName)))
 
               xobjDict.set(PDFName.of(xName), apNRef)
 
-              // Emit placement operators:  q  w 0 0 h x y cm  /Name Do  Q
-              // Placement derivation: stamp.ts BBox=[0,0,w,h]; the CTM
-              //   [w 0 0 h x y] maps that box to page rect [x, y, x+w, y+h].
+              // Emit placement operators via PDF §12.5.5 appearance-to-rect CTM.
+              // Read BBox and optional /Matrix from the form XObject stream dict.
+              const formStream = doc.context.lookup(apNRef)
+              const formDict =
+                formStream instanceof PDFRawStream
+                  ? formStream.dict
+                  : formStream instanceof PDFDict
+                    ? formStream
+                    : null
+
+              const bboxArr = formDict?.lookupMaybe(PDFName.of('BBox'), PDFArray)
+              const bx0 = (bboxArr?.get(0) as PDFNumber | undefined)?.asNumber() ?? 0
+              const by0 = (bboxArr?.get(1) as PDFNumber | undefined)?.asNumber() ?? 0
+              const bx1 = (bboxArr?.get(2) as PDFNumber | undefined)?.asNumber() ?? 1
+              const by1 = (bboxArr?.get(3) as PDFNumber | undefined)?.asNumber() ?? 1
+
+              // Apply /Matrix (6-element row-major) to BBox corners, take AABB.
+              const mArr = formDict?.lookupMaybe(PDFName.of('Matrix'), PDFArray)
+              const ma = (mArr?.get(0) as PDFNumber | undefined)?.asNumber() ?? 1
+              const mb = (mArr?.get(1) as PDFNumber | undefined)?.asNumber() ?? 0
+              const mc = (mArr?.get(2) as PDFNumber | undefined)?.asNumber() ?? 0
+              const md = (mArr?.get(3) as PDFNumber | undefined)?.asNumber() ?? 1
+              const me = (mArr?.get(4) as PDFNumber | undefined)?.asNumber() ?? 0
+              const mf = (mArr?.get(5) as PDFNumber | undefined)?.asNumber() ?? 0
+
+              // Transform all four BBox corners through /Matrix.
+              const corners = [
+                [bx0, by0], [bx1, by0], [bx0, by1], [bx1, by1],
+              ].map(([cx, cy]) => [ma * cx + mc * cy + me, mb * cx + md * cy + mf])
+              const txs = corners.map(([tx]) => tx)
+              const tys = corners.map(([, ty]) => ty)
+              const tx0 = Math.min(...txs)
+              const ty0 = Math.min(...tys)
+              const tx1 = Math.max(...txs)
+              const ty1 = Math.max(...tys)
+
               const { x, y, w, h } = a.rect
+              const extW = tx1 - tx0
+              const extH = ty1 - ty0
+              // Guard degenerate BBox — skip draw rather than divide by zero.
+              if (extW === 0 || extH === 0) break
+
+              const sx = w / extW
+              const sy = h / extH
+              const tx = x - tx0 * sx
+              const ty = y - ty0 * sy
+
               page.pushOperators(
                 pushGraphicsState(),
-                concatTransformationMatrix(w, 0, 0, h, x, y),
+                concatTransformationMatrix(sx, 0, 0, sy, tx, ty),
                 PDFOperator.of(PDFOperatorNames.DrawObject, [PDFName.of(xName)]),
                 popGraphicsState(),
               )

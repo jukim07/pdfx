@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { inflateSync } from 'zlib'
+import { createCanvas, loadImage } from '@napi-rs/canvas'
 import { PDFDocument, PDFName, PDFRawStream, PDFArray, PDFRef, PDFDict } from 'pdf-lib'
 import { writeAnnots } from '../src/annots/write.js'
 import { writeStampAnnots } from '../src/annots/stamp.js'
 import { flattenAnnots } from '../src/ops/flatten.js'
+import { renderPages } from '../src/extract/render.js'
 import type { Annot } from '../src/annots/model.js'
 
 // Minimal 1×1 white PNG (67 bytes) — used for stamp tests.
@@ -236,14 +238,15 @@ describe('flattenAnnots', () => {
   })
 
   it('stamp flatten: content stream placement matrix encodes rect x/y/w/h', async () => {
-    // stamp.ts BBox=[0,0,w,h]; placement matrix maps it to page rect [x,y,x+w,y+h].
-    // Expected cm: "w 0 0 h x y cm" → "50 0 0 30 100 200 cm"
+    // stamp.ts BBox=[0,0,w,h], no /Matrix → sx=sy=1, CTM = translate(x,y).
+    // Correct cm: "1 0 0 1 x y cm" → "1 0 0 1 100 200 cm"
+    // (Previously wrong: "50 0 0 30 100 200 cm" double-scaled the BBox extents.)
     const withStamp = await writeStampAnnots(await blankPdf(), [
       { page: 0, rect: { x: 100, y: 200, w: 50, h: 30 }, png: TINY_PNG },
     ])
     const flat = await flattenAnnots(withStamp)
     const text = await pageContentText(flat)
-    expect(text).toContain('50 0 0 30 100 200 cm')
+    expect(text).toContain('1 0 0 1 100 200 cm')
   })
 
   it('returns valid PDF bytes (parseable by PDFDocument.load)', async () => {
@@ -260,6 +263,75 @@ describe('flattenAnnots', () => {
     // Should not throw
     await expect(PDFDocument.load(flat)).resolves.toBeDefined()
   })
+
+  it('stamp flatten: rendered ink bbox lands inside rect, not page-filling (regression)', async () => {
+    // This test catches the double-scaling bug from commit 87c6932 where
+    // concatTransformationMatrix(w,0,0,h,x,y) was used instead of (1,0,0,1,x,y).
+    // The wrong matrix mapped form point (w,h) → (x+w², y+h²), producing a
+    // page-filling red blob instead of a 50×30 pt stamp at (100,200).
+    //
+    // Build a solid-red 4×4 PNG stamp placed at rect {x:100, y:200, w:50, h:30}
+    // on a 612×792 page.  At 72 dpi (scale=1) render to raster and measure the
+    // bounding box of red pixels.
+    //
+    // Page coords (PDF, bottom-left origin):
+    //   stamp occupies x∈[100,150], y_pdf∈[200,230]
+    // Raster coords (top-left origin, 72dpi → 1px/pt, page height=792):
+    //   raster_x ∈ [100, 150]
+    //   raster_y ∈ [792-230, 792-200] = [562, 592]
+    // Allow ±2px tolerance for rendering sub-pixel rounding.
+
+    // Build a 4×4 solid-red PNG.
+    const stampCanvas = createCanvas(4, 4)
+    const ctx = stampCanvas.getContext('2d')
+    ctx.fillStyle = '#ff0000'
+    ctx.fillRect(0, 0, 4, 4)
+    const redPng = new Uint8Array(stampCanvas.encodeSync('png'))
+
+    const withStamp = await writeStampAnnots(await blankPdf(), [
+      { page: 0, rect: { x: 100, y: 200, w: 50, h: 30 }, png: redPng },
+    ])
+    const flat = await flattenAnnots(withStamp)
+
+    // Render at 72 dpi → 1 PDF point = 1 pixel; page renders to 612×792.
+    let renderedPng: Uint8Array | undefined
+    for await (const { png } of renderPages(flat, { dpi: 72, pages: [1] })) {
+      renderedPng = png
+    }
+    expect(renderedPng).toBeDefined()
+
+    // Decode the PNG and find the axis-aligned bounding box of red pixels.
+    // A red pixel: r > 200 && g < 50 && b < 50.
+    const img = await loadImage(renderedPng!)
+    const imgCanvas = createCanvas(img.width, img.height)
+    const imgCtx = imgCanvas.getContext('2d')
+    imgCtx.drawImage(img, 0, 0)
+    const imageData = imgCtx.getImageData(0, 0, img.width, img.height)
+    const { data, width, height } = imageData
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (let py = 0; py < height; py++) {
+      for (let px = 0; px < width; px++) {
+        const idx = (py * width + px) * 4
+        const r = data[idx], g = data[idx + 1], b = data[idx + 2]
+        if (r > 200 && g < 50 && b < 50) {
+          if (px < minX) minX = px
+          if (px > maxX) maxX = px
+          if (py < minY) minY = py
+          if (py > maxY) maxY = py
+        }
+      }
+    }
+
+    // Before the fix (double-scaling): red ink filled most of the page,
+    // e.g. minX≈100, maxX≈611, minY≈0, maxY≈591 (empirically confirmed).
+    // After the fix: red ink bbox is tightly around the stamp rect.
+    const TOL = 2
+    expect(minX).toBeGreaterThanOrEqual(100 - TOL)
+    expect(maxX).toBeLessThanOrEqual(150 + TOL)
+    expect(minY).toBeGreaterThanOrEqual(562 - TOL) // 792-230
+    expect(maxY).toBeLessThanOrEqual(592 + TOL)    // 792-200
+  }, 30_000) // render takes ~1s
 
   // ──────────────────────────────────────────────────────────────────────────
   // Draw-operator locks: each subtype below asserts the actual PDF operators
