@@ -9,6 +9,7 @@ import {
 import type { PDFPage } from 'pdf-lib'
 import { tokenizeContent, stripOps, SHOW_OPS } from './content-stream.js'
 import type { ContentOp } from './content-stream.js'
+import { removeContainedImages } from './redact-images.js'
 import { StreamSurgeryError, regionsFromQuads } from './redact-model.js'
 import type { RedactRegion, RedactOptions } from './redact-model.js'
 import { itemQuad, quadsIntersectRect } from '../annots/quads.js'
@@ -78,7 +79,7 @@ function rectsForPage(regions: RedactRegion[], page: number): Rect[] {
   return regions.filter((r) => r.page === page).map((r) => r.rect)
 }
 
-async function assertNoSurvivors(bytes: Uint8Array, regions: RedactRegion[]): Promise<void> {
+export async function assertNoSurvivors(bytes: Uint8Array, regions: RedactRegion[]): Promise<void> {
   const pages = new Set(regions.map((r) => r.page))
   const byPage = await pdfJsPageItems(bytes, pages)
   for (const [page, { items, quads }] of byPage) {
@@ -116,49 +117,58 @@ export async function redactRegions(
     if (!page) throw new Error(`region references page ${pageIndex} but doc has ${pages.length}`)
     const rects = rectsForPage(regions, pageIndex)
 
-    const raw = decodeContents(page)
-    const ops = tokenizeContent(raw)
-    const showOps = ops.filter((op) => SHOW_OPS.has(op.operator))
+    // Work on the (possibly already spliced) stream so both passes see the same bytes.
+    let current = decodeContents(page)
+    let streamChanged = false
 
+    // --- Text surgery pass ---
     const pageItems = itemsByPage.get(pageIndex)
-    if (!pageItems) {
-      // No text items at all on this page — nothing to redact in content stream.
-      continue
-    }
-    const { items, quads } = pageItems
+    if (pageItems) {
+      const { items, quads } = pageItems
+      const ops = tokenizeContent(current)
+      const showOps = ops.filter((op) => SHOW_OPS.has(op.operator))
 
-    // Fast-path guard: 1:1 correspondence between show-ops and pdfjs items is required
-    // so we can map by index. Mismatch → throw rather than under-redact.
-    if (showOps.length !== items.length) {
-      throw new StreamSurgeryError(
-        pageIndex,
-        `show-op count (${showOps.length}) ≠ pdfjs item count (${items.length}); cannot guarantee safe removal`,
-      )
-    }
+      // Fast-path guard: 1:1 correspondence between show-ops and pdfjs items is required
+      // so we can map by index. Mismatch → throw rather than under-redact.
+      if (showOps.length !== items.length) {
+        throw new StreamSurgeryError(
+          pageIndex,
+          `show-op count (${showOps.length}) ≠ pdfjs item count (${items.length}); cannot guarantee safe removal`,
+        )
+      }
 
-    const toRemove = new Set<ContentOp>()
-    for (let i = 0; i < showOps.length; i++) {
-      if (rects.some((rect) => quadsIntersectRect([quads[i]], rect))) {
-        toRemove.add(showOps[i])
+      const toRemove = new Set<ContentOp>()
+      for (let i = 0; i < showOps.length; i++) {
+        if (rects.some((rect) => quadsIntersectRect([quads[i]], rect))) {
+          toRemove.add(showOps[i])
+        }
+      }
+
+      if (toRemove.size > 0) {
+        // `'` and `"` ops advance the current text line as a side effect; replace
+        // with T* to preserve line positioning so surrounding text stays aligned.
+        current = stripOps(current, toRemove, (op) => {
+          if (op.operator === "'") return 'T*'
+          if (op.operator === '"') return 'T*'
+          return ''
+        })
+        streamChanged = true
       }
     }
 
-    if (toRemove.size === 0) continue
+    // --- Image XObject removal pass (Task 5) ---
+    // Runs on `current` (text-rewritten stream) so both passes compose correctly.
+    const { rewritten, removed } = removeContainedImages(doc, page, current, rects)
+    if (removed > 0) {
+      current = rewritten
+      streamChanged = true
+    }
 
-    // `'` and `"` ops advance the current text line as a side effect; replace
-    // with T* to preserve line positioning so surrounding text stays aligned.
-    const rewritten = stripOps(raw, toRemove, (op) => {
-      if (op.operator === "'") return 'T*'
-      if (op.operator === '"') return 'T*'
-      return ''
-    })
-
-    const stream = doc.context.flateStream(rewritten)
-    const ref = doc.context.register(stream)
-    page.node.set(PDFName.of('Contents'), ref)
+    if (streamChanged) {
+      const ref = doc.context.register(doc.context.flateStream(current))
+      page.node.set(PDFName.of('Contents'), ref)
+    }
   }
-
-  // Task 5 adds removeContainedImages(doc, page, rects) here.
 
   let out = await doc.save()
   await assertNoSurvivors(out, regions) // fail closed — Known risks 1 & 2

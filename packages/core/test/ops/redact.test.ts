@@ -1,7 +1,27 @@
 import { describe, it, expect } from 'vitest'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
-import { redactRegions } from '../../src/ops/redact.js'
+import { redactRegions, assertNoSurvivors } from '../../src/ops/redact.js'
 import { StreamSurgeryError } from '../../src/ops/redact-model.js'
+import { buildSsnFixture, SSN } from '../../src/ops/fixtures.js'
+
+describe('assertNoSurvivors (direct unit test — most safety-critical guard)', () => {
+  it('throws StreamSurgeryError when text intersects a region (untouched SSN fixture)', async () => {
+    // assertNoSurvivors must throw if the caller passes it a document that still has
+    // the SSN text inside the marked region — this is the invariant that redactRegions
+    // relies on. Passing the raw (unredacted) fixture directly exercises the throw path.
+    const bytes = await buildSsnFixture()
+    // Region covers the SSN line: "SSN: 123-45-6789" drawn at (72, 660), 14pt.
+    const region = { page: 0, rect: { x: 60, y: 652, w: 250, h: 28 } }
+    await expect(assertNoSurvivors(bytes, [region])).rejects.toThrow(StreamSurgeryError)
+  })
+
+  it('does not throw when the region is over empty space (no text present)', async () => {
+    const bytes = await buildSsnFixture()
+    // Region in the blank area below all text — no items intersect it.
+    const region = { page: 0, rect: { x: 60, y: 50, w: 500, h: 50 } }
+    await expect(assertNoSurvivors(bytes, [region])).resolves.toBeUndefined()
+  })
+})
 
 describe('redactRegions fail-closed', () => {
   it('throws StreamSurgeryError instead of under-redacting on op/item mismatch', async () => {
