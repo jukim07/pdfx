@@ -27,7 +27,7 @@ export function useImport(
           const data = conv
             ? await conv.toPdf(file.name, file.data, undefined, file.path)
             : file.data
-          const provenance = buildProvenance(file, conv !== undefined)
+          const provenance = buildProvenance(file, conv !== null)
           const entries = await importIntoDocs(name, data, provenance)
           setDocs((prev) => [...prev, ...dedupeNames(prev, entries)])
         } catch (error) {
