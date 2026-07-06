@@ -21,7 +21,12 @@ interface CropOverlayProps {
  */
 export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [drag, setDrag] = useState<{ startX: number; startY: number; curX: number; curY: number } | null>(null)
+  type DragState = { startX: number; startY: number; curX: number; curY: number }
+  // dragRef mirrors drag state synchronously so onMouseUp always reads the
+  // live value even when the handler fires before React flushes the setDrag
+  // update from onMouseDown (confirmed stale-closure bug: fast drag drops crop).
+  const dragRef = useRef<DragState | null>(null)
+  const [drag, setDrag] = useState<DragState | null>(null)
 
   const toFrac = (clientX: number, clientY: number): { fx: number; fy: number } => {
     const rect = containerRef.current!.getBoundingClientRect()
@@ -35,7 +40,9 @@ export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): Rea
     e.stopPropagation()
     containerRef.current?.focus()
     const { fx, fy } = toFrac(e.clientX, e.clientY)
-    setDrag({ startX: fx, startY: fy, curX: fx, curY: fy })
+    const next = { startX: fx, startY: fy, curX: fx, curY: fy }
+    dragRef.current = next
+    setDrag(next)
   }, [])
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
@@ -45,21 +52,27 @@ export function CropOverlay({ onCropFinished, onCancel }: CropOverlayProps): Rea
       const rect = containerRef.current!.getBoundingClientRect()
       const fx = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
       const fy = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
-      return { ...d, curX: fx, curY: fy }
+      const next = { ...d, curX: fx, curY: fy }
+      dragRef.current = next
+      return next
     })
   }, [])
 
   const onMouseUp = useCallback((e: React.MouseEvent) => {
-    if (!drag) return
+    // Read from ref — closure over `drag` state is stale when mouseup fires
+    // before React has flushed the setDrag from onMouseDown.
+    const d = dragRef.current
+    if (!d) return
+    dragRef.current = null
     const { fx, fy } = toFrac(e.clientX, e.clientY)
-    const x = Math.min(drag.startX, fx)
-    const y = Math.min(drag.startY, fy)
-    const width = Math.abs(fx - drag.startX)
-    const height = Math.abs(fy - drag.startY)
+    const x = Math.min(d.startX, fx)
+    const y = Math.min(d.startY, fy)
+    const width = Math.abs(fx - d.startX)
+    const height = Math.abs(fy - d.startY)
     setDrag(null)
     if (width < 0.01 || height < 0.01) { onCancel(); return }
     onCropFinished({ x, y, width, height })
-  }, [drag, onCropFinished, onCancel])
+  }, [onCropFinished, onCancel])
 
   const selectionStyle: React.CSSProperties = drag ? {
     position: 'absolute',

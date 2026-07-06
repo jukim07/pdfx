@@ -32,12 +32,9 @@ test('footer crop applied to all pages persists as CropBox in the export', async
 
     // Drag from the top-left to ~92% height: keeps body text (y >= 174pt),
     // excludes the footer (text at y=30pt, glyph top ~40pt).
-    // React 19 defers setDrag updates from Playwright's native mousedown before
-    // the mouseup fires; dispatching via dispatchEvent with a setTimeout(20ms)
-    // between mousedown and mouseup allows React to flush the state update so
-    // onMouseUp sees drag !== null and calls onCropFinished.
-    // TODO(phase-3): app bug, reproduced here under native input — CropOverlay onMouseUp reads stale 'drag' via its [drag] dep; fix is the functional-updater pattern (see onMouseMove).
-    // This synthetic-event path stays valid only while CropOverlay's handlers remain React props on the overlay div (no pointer capture / document listeners).
+    // Events fire synchronously in a single evaluate call (no delay between
+    // mousedown and mouseup). CropOverlay.onMouseUp reads live state via
+    // dragRef rather than a stale closure, so fast drags are not dropped.
     const bb = (await overlay.boundingBox())!
     const x0 = bb.x + 1
     const y0 = bb.y + 1
@@ -49,14 +46,9 @@ test('footer crop applied to all pages persists as CropBox in the export', async
         el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y }))
       }
       fire('mousedown', x0, y0)
-      return new Promise<void>((resolve) => {
-        setTimeout(() => {
-          fire('mousemove', (x0 + x1) / 2, (y0 + y1) / 2)
-          fire('mousemove', x1, y1)
-          fire('mouseup', x1, y1)
-          resolve()
-        }, 20)
-      })
+      fire('mousemove', (x0 + x1) / 2, (y0 + y1) / 2)
+      fire('mousemove', x1, y1)
+      fire('mouseup', x1, y1)
     }, { x0, y0, x1, y1 })
 
     const dialog = page.locator('.crop-dialog')
