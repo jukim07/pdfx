@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { existsSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import { join } from 'path'
 import { PDFDocument } from 'pdf-lib'
@@ -82,6 +82,7 @@ test('footer crop applied to all pages persists as CropBox in the export', async
     }
     await shot(page, '05-crop', '03-crop-applied')
 
+    rmSync(pdfxPath, { force: true })
     await queueSavePath(app, pdfxPath)
     await clickMenu(app, 'export-pdfx')
     await expect.poll(() => existsSync(pdfxPath), { timeout: 60_000 }).toBe(true)

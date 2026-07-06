@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import { join } from 'path'
 import { runCli } from './helpers/cli'
@@ -27,6 +27,7 @@ test('exports .pdfx from GUI; pdfx info + extract verify it', async () => {
     const before = await getState(page)
     await shot(page, '03-export-pdfx', '01-before-export')
 
+    rmSync(pdfxPath, { force: true })
     await queueSavePath(app, pdfxPath)
     await clickMenu(app, 'export-pdfx')
     await expect.poll(() => existsSync(pdfxPath), { timeout: 60_000 }).toBe(true)

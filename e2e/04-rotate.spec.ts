@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, rmSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import { join } from 'path'
 import { PDFDocument } from 'pdf-lib'
@@ -35,6 +35,7 @@ test('rotate persists through export; crop is guarded off while rotated', async 
     await expect(guardedCrop).toBeVisible()
     await expect(guardedCrop).toBeDisabled()
 
+    rmSync(pdfxPath, { force: true })
     await queueSavePath(app, pdfxPath)
     await clickMenu(app, 'export-pdfx')
     await expect.poll(() => existsSync(pdfxPath), { timeout: 60_000 }).toBe(true)

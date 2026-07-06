@@ -16,6 +16,7 @@ export interface SaveFilter {
 }
 
 const api = {
+  // Env-only gate (preload can't see app.isPackaged): safe because the bridge is read-only and main's dialog queues stay double-gated.
   isTestMode: process.env.PDFX_TEST_MODE === '1',
   platform: process.platform,
   rendererReady: (): Promise<void> => ipcRenderer.invoke('pdfx:renderer-ready'),
