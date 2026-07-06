@@ -77,9 +77,9 @@ const api = {
     ipcRenderer.on('pdfx:zoom', listener)
     return () => ipcRenderer.removeListener('pdfx:zoom', listener)
   },
-  onMenu: (callback: (action: MenuAction) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, action: MenuAction): void =>
-      callback(action)
+  onMenu: (callback: (action: MenuAction) => void | Promise<void>): (() => void) => {
+    const listener = async (_event: Electron.IpcRendererEvent, action: MenuAction): Promise<void> =>
+      await callback(action)
     ipcRenderer.on('pdfx:menu', listener)
     return () => ipcRenderer.removeListener('pdfx:menu', listener)
   },

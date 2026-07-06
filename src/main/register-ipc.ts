@@ -194,9 +194,16 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
   ipcMain.handle(
     'pdfx:watermark-op',
     async (_event, op: string, bytes: Uint8Array, ...args: string[]) => {
+      if (typeof op !== 'string') throw new Error('watermark-op: invalid op')
+      if (!ArrayBuffer.isView(bytes) || bytes.byteLength > MAX_WRITE_BYTES) {
+        throw new Error('watermark-op: refusing invalid payload')
+      }
       const { findWatermarkCandidates, stripWatermark, rebuildLegible } = await import('@pdfx/core')
       if (op === 'find') return findWatermarkCandidates(bytes)
-      if (op === 'strip') return stripWatermark(bytes, args[0])
+      if (op === 'strip') {
+        if (typeof args[0] !== 'string' || !args[0]) throw new Error('watermark-op: strip requires candidateId')
+        return stripWatermark(bytes, args[0])
+      }
       if (op === 'legible') return rebuildLegible(bytes)
       throw new Error(`unknown watermark op: ${op}`)
     }
