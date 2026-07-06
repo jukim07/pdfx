@@ -48,7 +48,7 @@ test('exports .pdfx from GUI; pdfx info + extract verify it', async () => {
 
     // pages/pNNNN.png exist for each page
     const pngs = readdirSync(join(bundleDir, 'pages')).filter((f) => f.endsWith('.png'))
-    expect(pngs).toHaveLength(manifest.pages.length)
+    expect(pngs).toHaveLength(infoJson.pageCount)
 
     // manifest.pages[].page is 1-based; each entry maps to the correct doc name
     // Build cumulative page-to-doc lookup: docOfPage(p) → doc name, where p is 1-based.
@@ -71,6 +71,7 @@ test('exports .pdfx from GUI; pdfx info + extract verify it', async () => {
     expect(reportDoc!.markdown).not.toBeNull()
     const reportMd = readFileSync(join(bundleDir, reportDoc!.markdown!), 'utf8')
     expect(reportMd).toContain(SENTINEL)
+    expect(reportMd).toContain('kangaroo')
 
     // Persist values for human inspection
     writeFileSync(
