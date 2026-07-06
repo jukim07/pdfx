@@ -4,8 +4,8 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { extractArtifacts } from '@pdfx/core/extract'
 
-// Only process PDF files; chokidar 4.x dropped glob support so we filter here.
-const PDF_EXT = /\.pdf$/i
+// Accept both .pdf and .pdfx files; extractArtifacts handles both natively.
+const PDF_EXT = /\.(pdf|pdfx)$/i
 
 async function processFile(
   filePath: string,

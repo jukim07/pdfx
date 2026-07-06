@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
-import { buildPdfx } from '@pdfx/core'
+import { buildPdfx, MANIFEST_NAME } from '@pdfx/core'
 import { EXIT_ERROR, EXIT_OK, EXIT_USAGE, parsePagesFlag, runCli } from '../src/cli.js'
 
 function collectIo() {
@@ -80,6 +80,56 @@ describe('runCli', () => {
       { name: 'B', pages: 2 }
     ])
     expect(info.sha256).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('info --json includes source and tags for v1.1 manifest', async () => {
+    // Build a minimal PDF and attach a v1.1 manifest that has source + tags.
+    const pdf = await PDFDocument.create()
+    pdf.addPage([300, 300])
+    const manifest = {
+      pdfx: '1.1',
+      title: 'Provenance Test',
+      documents: [
+        {
+          name: 'Doc',
+          pages: 1,
+          source: {
+            filename: 'original.pdf',
+            sha256: 'abc123',
+            importedAt: '2024-01-01T00:00:00Z',
+          },
+          tags: ['contract'],
+        },
+      ],
+    }
+    await pdf.attach(
+      new TextEncoder().encode(JSON.stringify(manifest)),
+      MANIFEST_NAME,
+      { mimeType: 'application/json', description: 'PDFX manifest' }
+    )
+    const bytes = await pdf.save()
+    const dir = await mkdtemp(join(tmpdir(), 'pdfx-cli-v11-'))
+    const file = join(dir, 'provenance.pdfx')
+    await writeFile(file, bytes)
+
+    const { io, out } = collectIo()
+    expect(await runCli(['info', file, '--json'], io)).toBe(EXIT_OK)
+    const info = JSON.parse(out.join('\n'))
+    expect(info.docs[0]).toMatchObject({
+      name: 'Doc',
+      pages: 1,
+      source: { filename: 'original.pdf', sha256: 'abc123', importedAt: '2024-01-01T00:00:00Z' },
+      tags: ['contract'],
+    })
+  })
+
+  it('info --json omits source and tags for v1.0 manifest', async () => {
+    const file = await fixturePdfxFile()
+    const { io, out } = collectIo()
+    expect(await runCli(['info', file, '--json'], io)).toBe(EXIT_OK)
+    const info = JSON.parse(out.join('\n'))
+    expect(info.docs[0]).not.toHaveProperty('source')
+    expect(info.docs[0]).not.toHaveProperty('tags')
   })
 
   it('extract writes bundle and reports it as JSON', async () => {

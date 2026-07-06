@@ -349,7 +349,12 @@ async function runInfo(rest: string[], io: CliIo): Promise<number> {
     const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true })
     const manifest: PdfxManifest | null = await parseManifest(bytes)
     const docs = manifest
-      ? manifest.documents.map((d) => ({ name: d.name, pages: d.pages }))
+      ? manifest.documents.map((d) => ({
+          name: d.name,
+          pages: d.pages,
+          ...(d.source !== undefined ? { source: d.source } : {}),
+          ...(d.tags !== undefined ? { tags: d.tags } : {}),
+        }))
       : [{ name: stripExtension(basename(file)), pages: pdf.getPageCount() }]
     const info = {
       file,

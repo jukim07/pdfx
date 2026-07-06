@@ -99,4 +99,37 @@ describe('watchExtract', () => {
 
     expect(lines).toHaveLength(0)
   })
+
+  it('emits ok NDJSON line when a .pdfx file is dropped', async () => {
+    const inDir = mkdtempSync(path.join(os.tmpdir(), 'pdfx-watch-in4-'))
+    const outRoot = mkdtempSync(path.join(os.tmpdir(), 'pdfx-watch-out4-'))
+    tmpDirs.push(inDir, outRoot)
+
+    const lines: string[] = []
+    const stop = await watchExtract(inDir, outRoot, (line) => lines.push(line))
+
+    // Build a minimal valid PDFX in memory using @pdfx/core's buildPdfx.
+    const { PDFDocument } = await import('pdf-lib')
+    const { buildPdfx } = await import('@pdfx/core')
+    const srcDoc = await PDFDocument.create()
+    srcDoc.addPage([612, 792])
+    const srcBytes = new Uint8Array(await srcDoc.save())
+    const pdfxBytes = await buildPdfx(
+      [{ name: 'doc', pages: [{ bytes: srcBytes, sourceKey: 'src', pageIndex: 0 }] }],
+      'test-collection'
+    )
+
+    const pdfxPath = path.join(inDir, 'sample.pdfx')
+    writeFileSync(pdfxPath, pdfxBytes)
+
+    await waitFor(() => lines.length > 0)
+    await stop()
+
+    expect(lines).toHaveLength(1)
+    const parsed = JSON.parse(lines[0])
+    expect(parsed.status).toBe('ok')
+    expect(parsed.file).toBe(pdfxPath)
+    expect(existsSync(parsed.outDir)).toBe(true)
+    expect(existsSync(pdfxPath + '.done')).toBe(true)
+  }, 8000)
 })
