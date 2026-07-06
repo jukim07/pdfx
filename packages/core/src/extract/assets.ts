@@ -34,88 +34,96 @@ export interface AssetsManifest {
  */
 export async function extractAssets(bytes: Uint8Array, outDir: string): Promise<AssetsManifest> {
   const pdf = await getDocument({ data: bytes.slice() }).promise
-  await mkdir(join(outDir, 'images'), { recursive: true })
-  await mkdir(join(outDir, 'attachments'), { recursive: true })
+  try {
+    await mkdir(join(outDir, 'images'), { recursive: true })
+    await mkdir(join(outDir, 'attachments'), { recursive: true })
 
-  // Build MIME map from pdf-lib (pdfjs does not expose /Subtype on attachments).
-  const mimeByFilename = await readAttachmentMimeTypes(bytes)
+    const images: AssetsManifest['images'] = []
+    const seenRefs = new Set<string>()
+    const fonts: AssetsManifest['fonts'] = []
+    const seenFonts = new Set<string>()
 
-  const images: AssetsManifest['images'] = []
-  const seenRefs = new Set<string>()
-  const fonts: AssetsManifest['fonts'] = []
-  const seenFonts = new Set<string>()
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum)
+      const opList = await page.getOperatorList()
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum)
-    const opList = await page.getOperatorList()
+      for (let i = 0; i < opList.fnArray.length; i++) {
+        if (opList.fnArray[i] !== OPS.paintImageXObject) continue
+        const refId = opList.argsArray[i][0] as string
+        if (seenRefs.has(refId)) continue
+        seenRefs.add(refId)
 
-    for (let i = 0; i < opList.fnArray.length; i++) {
-      if (opList.fnArray[i] !== OPS.paintImageXObject) continue
-      const refId = opList.argsArray[i][0] as string
-      if (seenRefs.has(refId)) continue
-      seenRefs.add(refId)
-
-      let pngBytes: Uint8Array | null = null
-      try {
-        // Use callback form: page.objs.get(refId, cb) fires cb once the XObject
-        // is resolved, which may happen asynchronously relative to getOperatorList().
-        const imgData = await new Promise<{ data?: Uint8Array; width?: number; height?: number } | null>(
-          (resolve) => {
-            try {
-              page.objs.get(refId, resolve)
-            } catch {
-              resolve(null)
+        let pngBytes: Uint8Array | null = null
+        try {
+          // Use callback form: page.objs.get(refId, cb) fires cb once the XObject
+          // is resolved, which may happen asynchronously relative to getOperatorList().
+          const imgData = await new Promise<{ data?: Uint8Array; width?: number; height?: number } | null>(
+            (resolve) => {
+              try {
+                page.objs.get(refId, resolve)
+              } catch {
+                resolve(null)
+              }
             }
+          )
+          if (imgData?.data && imgData.width && imgData.height) {
+            pngBytes = rgbToPng(imgData.data, imgData.width, imgData.height)
           }
-        )
-        if (imgData?.data && imgData.width && imgData.height) {
-          pngBytes = rgbToPng(imgData.data, imgData.width, imgData.height)
+        } catch {
+          // Object not resolved or inaccessible — skip this image
+        }
+        if (!pngBytes) continue
+
+        const file = join('images', `image-${images.length}.png`)
+        await writeFile(join(outDir, file), pngBytes)
+        images.push({ refId, page: pageNum - 1, file })
+      }
+
+      // Best-effort font enumeration from resolved common objects
+      try {
+        for (const [key] of page.commonObjs) {
+          if ((key.startsWith('g_') || key.startsWith('f_') || key.startsWith('F')) && !seenFonts.has(key)) {
+            seenFonts.add(key)
+            fonts.push({ name: key, subtype: null })
+          }
         }
       } catch {
-        // Object not resolved or inaccessible — skip this image
+        // Best-effort; ignore
       }
-      if (!pngBytes) continue
-
-      const file = join('images', `image-${images.length}.png`)
-      await writeFile(join(outDir, file), pngBytes)
-      images.push({ refId, page: pageNum - 1, file })
     }
 
-    // Best-effort font enumeration from resolved common objects
-    try {
-      for (const [key] of page.commonObjs) {
-        if ((key.startsWith('g_') || key.startsWith('f_') || key.startsWith('F')) && !seenFonts.has(key)) {
-          seenFonts.add(key)
-          fonts.push({ name: key, subtype: null })
-        }
+    const rawAttachments = (await pdf.getAttachments()) as Record<
+      string,
+      { filename?: string; content: Uint8Array }
+    > | null
+
+    // Build MIME map only when attachments exist — avoids an unnecessary pdf-lib
+    // PDFDocument.load() when the PDF has no embedded files.
+    const mimeByFilename =
+      rawAttachments && Object.keys(rawAttachments).length > 0
+        ? await readAttachmentMimeTypes(bytes)
+        : new Map<string, string>()
+
+    const attachments: AssetsManifest['attachments'] = []
+    if (rawAttachments) {
+      for (const [key, att] of Object.entries(rawAttachments)) {
+        const filename = att.filename ?? key
+        if (filename === MANIFEST_NAME) continue // skip pdfx manifest
+        const safe = filename.replace(/[\\/:*?"<>|]/g, '-')
+        const file = join('attachments', safe)
+        await writeFile(join(outDir, file), att.content)
+        attachments.push({
+          filename,
+          mimeType: mimeByFilename.get(filename) ?? null,
+          file
+        })
       }
-    } catch {
-      // Best-effort; ignore
     }
+
+    return { images, attachments, fonts }
+  } finally {
+    await pdf.destroy()
   }
-
-  const rawAttachments = (await pdf.getAttachments()) as Record<
-    string,
-    { filename?: string; content: Uint8Array }
-  > | null
-
-  const attachments: AssetsManifest['attachments'] = []
-  if (rawAttachments) {
-    for (const [key, att] of Object.entries(rawAttachments)) {
-      const filename = att.filename ?? key
-      if (filename === MANIFEST_NAME) continue // skip pdfx manifest
-      const safe = filename.replace(/[\\/:*?"<>|]/g, '-')
-      const file = join('attachments', safe)
-      await writeFile(join(outDir, file), att.content)
-      attachments.push({
-        filename,
-        mimeType: mimeByFilename.get(filename) ?? null,
-        file
-      })
-    }
-  }
-
-  return { images, attachments, fonts }
 }
 
 /**

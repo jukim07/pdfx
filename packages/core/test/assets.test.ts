@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest'
-import { mkdtemp, readFile, stat } from 'node:fs/promises'
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { PDFDocument } from 'pdf-lib'
@@ -39,7 +39,12 @@ let fixture: Uint8Array
 let outDir: string
 beforeAll(async () => {
   fixture = await makeFixture()
+})
+beforeEach(async () => {
   outDir = await mkdtemp(join(tmpdir(), 'pdfx-assets-'))
+})
+afterEach(async () => {
+  await rm(outDir, { recursive: true, force: true })
 })
 
 describe('extractAssets', () => {
