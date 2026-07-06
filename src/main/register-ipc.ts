@@ -1,4 +1,4 @@
-import { ipcMain, dialog, clipboard } from 'electron'
+import { ipcMain, dialog, clipboard, app } from 'electron'
 import { basename, isAbsolute } from 'path'
 import { existsSync } from 'fs'
 import { writeFile } from 'fs/promises'
@@ -10,7 +10,6 @@ import { getMainWindow, setRendererReady, sendOpenPaths } from './window'
 import { nextOpenPaths, nextSavePath, testModeEnabled } from './test-mode'
 import { writeAnnots, writeStampAnnots } from '@pdfx/core'
 import type { Annot, StampAnnot } from '@pdfx/core'
-import { app } from 'electron'
 import { SignatureStore } from './signature-store'
 
 const MAX_WRITE_BYTES = 1024 * 1024 * 1024 // 1 GiB cap on a single IPC write

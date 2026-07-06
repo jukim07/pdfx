@@ -63,6 +63,16 @@ export default function App(): React.JSX.Element {
   const [stampPng, setStampPng] = useState<Uint8Array | null>(null)
   const [showSignaturePicker, setShowSignaturePicker] = useState(false)
 
+  // Wrapper so any tool switch away from 'stamp' clears the stale png immediately.
+  // Without this, re-selecting stamp later would silently reuse the old bytes.
+  const handleAnnotTool = useCallback(
+    (tool: Parameters<typeof annot.setTool>[0]) => {
+      if (tool !== 'stamp') setStampPng(null)
+      annot.setTool(tool)
+    },
+    [annot.setTool]
+  )
+
   const handleOpenSignaturePicker = useCallback(() => {
     setShowSignaturePicker(true)
   }, [])
@@ -282,7 +292,7 @@ export default function App(): React.JSX.Element {
           onExportPdf={() => exportCollection('pdf')}
           onExportZip={exportZip}
           annotTool={annot.tool}
-          onAnnotTool={annot.setTool}
+          onAnnotTool={handleAnnotTool}
           annotDraftCount={annot.drafts.length}
           onSaveAnnots={() => void handleSaveAnnots()}
           onOpenSignaturePicker={handleOpenSignaturePicker}
@@ -360,7 +370,7 @@ export default function App(): React.JSX.Element {
             onActivePageChange={fullViewState.setHiddenPageId}
             onClose={fullViewState.closeFullView}
             annotTool={annot.tool}
-            onAnnotTool={annot.setTool}
+            onAnnotTool={handleAnnotTool}
             onAnnotCommit={handleAnnotCommit}
             annotDraftCount={annot.drafts.length}
             onSaveAnnots={() => void handleSaveAnnots()}

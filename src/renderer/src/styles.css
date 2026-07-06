@@ -1275,3 +1275,147 @@ body {
   display: flex;
   gap: 8px;
 }
+
+/* ── Signature picker modal ─────────────────────────────────────────────── */
+
+/* Overlay backdrop — matches .signature-pad pattern */
+.signature-picker-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Picker panel card */
+.signature-picker {
+  background: var(--overlay-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--page-shadow);
+  padding: 20px;
+  width: 480px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+/* Header row: title + close button */
+.signature-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.signature-picker-header button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.signature-picker-header button:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* Scrollable chip list */
+.signature-picker-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Individual signature chip: thumbnail + label */
+.signature-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: var(--hover);
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  width: 120px;
+  position: relative;
+  transition: background-color 0.15s ease;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.signature-chip:hover {
+  background: var(--control);
+}
+
+.signature-chip img {
+  width: 100px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.signature-chip-name {
+  font-size: 11px;
+  color: var(--ink-soft);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Remove (×) badge — top-right corner */
+.signature-chip-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 10px;
+  line-height: 1;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--ink-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.signature-chip:hover .signature-chip-remove {
+  opacity: 1;
+}
+
+.signature-chip-remove:hover {
+  background: var(--control);
+  color: var(--ink);
+}
+
+/* "Add new" chip variant */
+.signature-chip.add {
+  color: var(--ink-faint);
+  font-size: 13px;
+  border: 1.5px dashed var(--hairline);
+  background: transparent;
+  height: 82px;
+  justify-content: center;
+}
