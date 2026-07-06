@@ -75,6 +75,8 @@ function freeTextRef(page: PDFPage, a: FreeTextAnnot): PDFRef {
     DA: PDFString.of(da),
     // 0 = left-align per PDF spec §12.7.3.3
     Q: 0,
+    // /C required for readers that source color from /C rather than /DA
+    C: colorArray(a.color),
     P: page.ref,
   }
   return ctx.register(ctx.obj(literal as Parameters<typeof ctx.obj>[0]))

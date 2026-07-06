@@ -210,6 +210,29 @@ describe('readAnnots round-trip', () => {
     }
   })
 
+  it('freetext color round-trips via /C (non-black color reads back correctly)', async () => {
+    // RED against current code: freeTextRef writes color only in /DA, not /C;
+    // readAnnots reads /C only → color comes back as black {r:0,g:0,b:0}.
+    const out = await writeAnnots(await blankPdf(), [
+      {
+        type: 'text',
+        page: 0,
+        rect: { x: 10, y: 400, w: 200, h: 50 },
+        contents: 'colored text',
+        fontSize: 14,
+        color: { r: 1, g: 0, b: 0 }, // red
+      },
+    ])
+    const [page0] = await readAnnots(out)
+    const a = page0.annots[0]
+    expect(a.type).toBe('text')
+    if (a.type === 'text') {
+      expect(a.color.r).toBeCloseTo(1)
+      expect(a.color.g).toBeCloseTo(0)
+      expect(a.color.b).toBeCloseTo(0)
+    }
+  })
+
   it('handles annot dict with no /Contents (defaults to empty string for note)', async () => {
     const base = await blankPdf()
     const doc = await PDFDocument.load(base)
