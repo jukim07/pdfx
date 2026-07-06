@@ -1,4 +1,6 @@
+import type { Annot } from '@pdfx/core'
 import type { DocEntry } from '../types'
+import type { AnnotTool } from '../annots/useAnnotTool'
 import type { Rect } from './full-view/geometry'
 import { useFullViewState } from './full-view/use-full-view-state'
 import { useFullViewControls } from './full-view/use-full-view-controls'
@@ -15,6 +17,8 @@ interface FullViewProps {
   originRect: Rect | null
   onActivePageChange: (pageId: string) => void
   onClose: () => void
+  annotTool?: AnnotTool
+  onAnnotCommit?: (a: Annot) => void
 }
 
 export function FullView({
@@ -23,7 +27,9 @@ export function FullView({
   startPageId,
   originRect,
   onActivePageChange,
-  onClose
+  onClose,
+  annotTool,
+  onAnnotCommit
 }: FullViewProps): React.JSX.Element {
   const s = useFullViewState(docs, startDocId, startPageId, originRect)
 
@@ -106,6 +112,8 @@ export function FullView({
         resetView={controls.resetView}
         applyZoom={controls.applyZoom}
         runClose={controls.runClose}
+        annotTool={annotTool}
+        onAnnotCommit={onAnnotCommit}
       />
       <FullViewChrome
         chromeOpacity={chromeOpacity}

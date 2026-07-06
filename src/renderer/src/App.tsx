@@ -18,6 +18,8 @@ import { FindProvider } from './search/FindContext'
 import { FindBar } from './components/FindBar'
 import { CropRangeDialog } from './components/CropRangeDialog'
 import type { CropRect } from './components/CropOverlay'
+import { useAnnotTool } from './annots/useAnnotTool'
+import type { Annot } from '@pdfx/core'
 
 const TOAST_MS = 4000
 
@@ -53,6 +55,12 @@ export default function App(): React.JSX.Element {
     },
     [cropTarget]
   )
+  const annot = useAnnotTool()
+
+  const handleAnnotCommit = useCallback((a: Annot) => {
+    annot.addDraft(a)
+  }, [annot])
+
   const layout = useMemo(() => computeLayout(docs), [docs])
 
   const searchIndex = useSearchIndex(docs)
@@ -174,6 +182,8 @@ export default function App(): React.JSX.Element {
           onOpen={openViaDialog}
           onExportPdf={() => exportCollection('pdf')}
           onExportZip={exportZip}
+          annotTool={annot.tool}
+          onAnnotTool={annot.setTool}
         />
 
         {find.open && (
@@ -247,6 +257,8 @@ export default function App(): React.JSX.Element {
             originRect={fullView.originRect}
             onActivePageChange={fullViewState.setHiddenPageId}
             onClose={fullViewState.closeFullView}
+            annotTool={annot.tool}
+            onAnnotCommit={handleAnnotCommit}
           />
         )}
 

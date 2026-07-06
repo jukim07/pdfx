@@ -1,4 +1,6 @@
+import type { Annot } from '@pdfx/core'
 import type { PageEntry } from '../../types'
+import type { AnnotTool } from '../../annots/useAnnotTool'
 import { PageView } from '../PageView'
 import { useFindState } from '../../search/FindContext'
 import type { View } from './geometry'
@@ -17,11 +19,13 @@ interface FullViewPageProps {
   renderVersion: number
   resetView: () => void
   applyZoom: (nextZoom: (z: number) => number, focal?: { x: number; y: number }) => void
+  annotTool?: AnnotTool
+  onAnnotCommit?: (a: Annot) => void
 }
 
 export function FullViewPage(props: FullViewPageProps): React.JSX.Element {
   const { page: p, viewport, isCurrent, view, zoomed, interactive, animating } = props
-  const { flip, flipTransition, renderVersion, resetView, applyZoom } = props
+  const { flip, flipTransition, renderVersion, resetView, applyZoom, annotTool, onAnnotCommit } = props
 
   const { active, query, matchingPageIds, getOcrWords } = useFindState()
   const highlight = active && isCurrent && matchingPageIds.has(p.id)
@@ -69,6 +73,9 @@ export function FullViewPage(props: FullViewPageProps): React.JSX.Element {
           eager={isCurrent}
           highlightQuery={highlight ? query : undefined}
           ocrWords={highlight ? getOcrWords(`${p.source.id}:${p.pageIndex}`) : undefined}
+          annotTool={isCurrent ? annotTool : undefined}
+          pageEntry={isCurrent ? p : undefined}
+          onAnnotCommit={isCurrent ? onAnnotCommit : undefined}
         />
       </div>
     </div>

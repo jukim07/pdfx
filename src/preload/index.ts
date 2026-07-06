@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { Annot } from '@pdfx/core'
 
 export interface OpenedFile {
   name: string
@@ -40,6 +41,8 @@ const api = {
     ipcRenderer.invoke('pdfx:markup-to-pdf', html, fitPageHeightPx),
   writeFile: (path: string, data: Uint8Array): Promise<string> =>
     ipcRenderer.invoke('pdfx:write-file', path, data),
+  writeAnnots: (bytes: Uint8Array, annots: Annot[]): Promise<Uint8Array> =>
+    ipcRenderer.invoke('pdfx:write-annots', bytes, annots),
   openFiles: (): Promise<OpenedFile[]> => ipcRenderer.invoke('pdfx:open-files'),
   onFilesOpened: (callback: (files: OpenedFile[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, files: OpenedFile[]): void =>

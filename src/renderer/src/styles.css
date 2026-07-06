@@ -785,6 +785,39 @@ body {
   font-size: 10px;
 }
 
+/* Annotation overlay — sits above find/ocr layers; pointer-events on so it
+   can capture rubber-band drags while a tool is active. */
+.annot-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+/* Rubber-band preview drawn while the user drags. */
+.annot-draft {
+  position: absolute;
+  background-color: #ffd54a;
+  opacity: 0.4;
+  border: 1px solid #e0a800;
+}
+
+/* Toolbar annotation-mode button cluster */
+.annot-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-left: 1px solid rgba(0, 0, 0, 0.1);
+  margin-left: 4px;
+}
+
+.annot-cluster .icon-btn.active {
+  background: rgba(255, 213, 74, 0.35);
+  color: #7a5c00;
+}
+
 .doc-list.compact .page-strip-inner {
   gap: 8px;
   padding: 2px 6px 8px;

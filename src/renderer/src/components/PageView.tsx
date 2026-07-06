@@ -3,6 +3,10 @@ import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import { BASE_RASTER, dpr, logRenderError, renderBase, renderDetail } from './page-view/raster'
 import { FindHighlight } from './find-highlight'
 import type { OcrWord } from '../ocr/types'
+import type { Annot } from '@pdfx/core'
+import type { PageEntry } from '../types'
+import { AnnotOverlay } from '../annots/AnnotOverlay'
+import type { AnnotTool } from '../annots/useAnnotTool'
 
 interface PageViewProps {
   pdf: PDFDocumentProxy
@@ -15,6 +19,12 @@ interface PageViewProps {
   rotation?: number // 0 | 90 | 180 | 270, CSS-preview only; export baking is toExportPage's job
   highlightQuery?: string
   ocrWords?: OcrWord[]
+  /** When set, mounts the annotation rubber-band overlay on this page. */
+  annotTool?: AnnotTool
+  /** The PageEntry for this page — required when annotTool is set. */
+  pageEntry?: PageEntry
+  /** Called when user finishes drawing an annotation on this page. */
+  onAnnotCommit?: (a: Annot) => void
 }
 
 function PageViewImpl({
@@ -27,7 +37,10 @@ function PageViewImpl({
   detail = true,
   rotation = 0,
   highlightQuery,
-  ocrWords
+  ocrWords,
+  annotTool,
+  pageEntry,
+  onAnnotCommit
 }: PageViewProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const baseRef = useRef<HTMLCanvasElement>(null)
@@ -131,6 +144,13 @@ function PageViewImpl({
           naturalHeight={naturalHeight}
           query={highlightQuery}
           ocrWords={ocrWords}
+        />
+      ) : null}
+      {annotTool && annotTool !== 'none' && pageEntry && onAnnotCommit ? (
+        <AnnotOverlay
+          page={pageEntry}
+          tool={annotTool}
+          onCommit={onAnnotCommit}
         />
       ) : null}
     </div>

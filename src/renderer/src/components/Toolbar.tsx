@@ -1,3 +1,5 @@
+import type { AnnotTool } from '../annots/useAnnotTool'
+
 interface ToolbarProps {
   documentCount: number
   pageCount: number
@@ -9,6 +11,8 @@ interface ToolbarProps {
   onOpen: () => void
   onExportPdf: () => void
   onExportZip: () => void
+  annotTool?: AnnotTool
+  onAnnotTool?: (t: AnnotTool) => void
 }
 
 const isMac = window.api.platform === 'darwin'
@@ -23,7 +27,9 @@ export function Toolbar({
   onZoomReset,
   onOpen,
   onExportPdf,
-  onExportZip
+  onExportZip,
+  annotTool = 'none',
+  onAnnotTool
 }: ToolbarProps): React.JSX.Element {
   return (
     <header className={`toolbar${isMac ? ' mac' : ''}`}>
@@ -66,6 +72,45 @@ export function Toolbar({
               <path d="M12 5v14" />
               <path d="M5 12h14" />
             </svg>
+          </button>
+        </div>
+      )}
+      {documentCount > 0 && onAnnotTool && (
+        <div className="annot-cluster">
+          <button
+            className={`icon-btn${annotTool === 'highlight' ? ' active' : ''}`}
+            title="Highlight"
+            onClick={() => onAnnotTool(annotTool === 'highlight' ? 'none' : 'highlight')}
+          >
+            H
+          </button>
+          <button
+            className={`icon-btn${annotTool === 'underline' ? ' active' : ''}`}
+            title="Underline"
+            onClick={() => onAnnotTool(annotTool === 'underline' ? 'none' : 'underline')}
+          >
+            U
+          </button>
+          <button
+            className={`icon-btn${annotTool === 'strikeout' ? ' active' : ''}`}
+            title="Strikeout"
+            onClick={() => onAnnotTool(annotTool === 'strikeout' ? 'none' : 'strikeout')}
+          >
+            S
+          </button>
+          <button
+            className={`icon-btn${annotTool === 'note' ? ' active' : ''}`}
+            title="Note"
+            onClick={() => onAnnotTool(annotTool === 'note' ? 'none' : 'note')}
+          >
+            N
+          </button>
+          <button
+            className={`icon-btn${annotTool === 'text' ? ' active' : ''}`}
+            title="Free text"
+            onClick={() => onAnnotTool(annotTool === 'text' ? 'none' : 'text')}
+          >
+            T
           </button>
         </div>
       )}

@@ -8,6 +8,8 @@ import { clipboardFilePaths } from './clipboard'
 import { readResource } from './resource'
 import { getMainWindow, setRendererReady, sendOpenPaths } from './window'
 import { nextOpenPaths, nextSavePath, testModeEnabled } from './test-mode'
+import { writeAnnots } from '@pdfx/core'
+import type { Annot } from '@pdfx/core'
 
 const MAX_WRITE_BYTES = 1024 * 1024 * 1024 // 1 GiB cap on a single IPC write
 
@@ -87,6 +89,16 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
     await writeFile(path, data)
     return basename(path)
   })
+
+  ipcMain.handle(
+    'pdfx:write-annots',
+    async (_event, bytes: Uint8Array, annots: Annot[]): Promise<Uint8Array> => {
+      if (!ArrayBuffer.isView(bytes) || bytes.byteLength > MAX_WRITE_BYTES) {
+        throw new Error('write-annots: refusing invalid payload')
+      }
+      return writeAnnots(bytes, annots)
+    }
+  )
 
   ipcMain.handle('pdfx:open-files', async (): Promise<OpenedFile[]> => {
     if (testModeEnabled()) {
