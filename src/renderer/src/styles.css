@@ -963,12 +963,16 @@ body {
 .full-chrome {
   position: absolute;
   inset: 0;
+  /* z-index must exceed .full-scroll's stacking context (which contains
+     .annot-layer at z-index 4) so the chrome's buttons are hit-testable. */
+  z-index: 10;
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
 
 .full-chrome .icon-btn,
-.full-chrome .full-nav {
+.full-chrome .full-nav,
+.full-chrome .btn {
   pointer-events: auto;
 }
 
@@ -994,9 +998,25 @@ body {
 }
 
 .full-bar .icon-btn {
-  margin-left: auto;
   width: 30px;
   height: 30px;
+}
+
+.full-bar-spacer {
+  flex: 1;
+}
+
+.full-bar-annot-cluster {
+  /* Reset the left-border divider used in the main toolbar cluster — the
+     full-bar already provides visual separation via the dark background. */
+  border-left: none;
+  margin-left: 0;
+}
+
+.full-bar-save-annots {
+  font-size: 12px;
+  padding: 4px 10px;
+  white-space: nowrap;
 }
 
 /* Native scroll-snap drives navigation: the outer scroller pages through documents

@@ -307,7 +307,11 @@ export default function App(): React.JSX.Element {
             onActivePageChange={fullViewState.setHiddenPageId}
             onClose={fullViewState.closeFullView}
             annotTool={annot.tool}
+            onAnnotTool={annot.setTool}
             onAnnotCommit={handleAnnotCommit}
+            annotDraftCount={annot.drafts.length}
+            onSaveAnnots={() => void handleSaveAnnots()}
+            busy={busy}
           />
         )}
 

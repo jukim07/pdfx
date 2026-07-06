@@ -18,7 +18,11 @@ interface FullViewProps {
   onActivePageChange: (pageId: string) => void
   onClose: () => void
   annotTool?: AnnotTool
+  onAnnotTool?: (t: AnnotTool) => void
   onAnnotCommit?: (a: Annot) => void
+  annotDraftCount?: number
+  onSaveAnnots?: () => void
+  busy?: boolean
 }
 
 export function FullView({
@@ -29,7 +33,11 @@ export function FullView({
   onActivePageChange,
   onClose,
   annotTool,
-  onAnnotCommit
+  onAnnotTool,
+  onAnnotCommit,
+  annotDraftCount,
+  onSaveAnnots,
+  busy
 }: FullViewProps): React.JSX.Element {
   const s = useFullViewState(docs, startDocId, startPageId, originRect)
 
@@ -122,6 +130,11 @@ export function FullView({
         pageCount={s.doc.pages.length}
         runClose={controls.runClose}
         navByKey={controls.navByKey}
+        annotTool={annotTool}
+        onAnnotTool={onAnnotTool}
+        annotDraftCount={annotDraftCount}
+        onSaveAnnots={onSaveAnnots}
+        busy={busy}
       />
     </div>
   )
