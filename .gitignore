@@ -6,6 +6,9 @@ out
 *.tsbuildinfo
 .smoke
 
+# e2e evidence bundles (screenshots + exported artifacts) — regenerated every run
+e2e/evidence/
+
 # Generated native build tree (node-gyp output; rebuilt by `yarn build:native` on postinstall).
 # Keeping it untracked avoids committing compiled binaries and leaking local absolute paths.
 native/build/

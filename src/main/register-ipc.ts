@@ -7,6 +7,7 @@ import { OpenedFile, IMPORTABLE, readFiles, expandDropPaths } from './file-intak
 import { clipboardFilePaths } from './clipboard'
 import { readResource } from './resource'
 import { getMainWindow, setRendererReady, sendOpenPaths } from './window'
+import { nextOpenPaths, nextSavePath, testModeEnabled } from './test-mode'
 
 const MAX_WRITE_BYTES = 1024 * 1024 * 1024 // 1 GiB cap on a single IPC write
 
@@ -21,6 +22,14 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
   ipcMain.handle(
     'pdfx:choose-save-path',
     async (_event, defaultName: string, filter?: { name: string; extensions: string[] }) => {
+      if (testModeEnabled()) {
+        const queued = nextSavePath()
+        if (queued === undefined) {
+          console.warn('[pdfx test-mode] save dialog with empty queue — returning null (cancel)')
+          return null
+        }
+        return queued
+      }
       const mainWindow = getMainWindow()
       if (!mainWindow) return null
       const result = await dialog.showSaveDialog(mainWindow, {
@@ -80,6 +89,14 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
   })
 
   ipcMain.handle('pdfx:open-files', async (): Promise<OpenedFile[]> => {
+    if (testModeEnabled()) {
+      const queued = nextOpenPaths()
+      if (queued === undefined) {
+        console.warn('[pdfx test-mode] open dialog with empty queue — returning [] (cancel)')
+        return []
+      }
+      return readFiles(queued)
+    }
     const mainWindow = getMainWindow()
     if (!mainWindow) return []
     const result = await dialog.showOpenDialog(mainWindow, {

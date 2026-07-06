@@ -16,6 +16,7 @@ export interface SaveFilter {
 }
 
 const api = {
+  isTestMode: process.env.PDFX_TEST_MODE === '1',
   platform: process.platform,
   rendererReady: (): Promise<void> => ipcRenderer.invoke('pdfx:renderer-ready'),
   chooseSavePath: (defaultName: string, filter?: SaveFilter): Promise<string | null> =>
