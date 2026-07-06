@@ -5,7 +5,8 @@ import { parseArgs } from 'node:util'
 import { PDFDocument } from 'pdf-lib'
 import {
   cropPages, deletePages, flattenAnnots, mergeInputs, pullPages, resetCrop, rotatePages, splitPdfx,
-  parseManifest, stripExtension, type MergeInput, type PdfxManifest
+  parseManifest, stripExtension, writeStampAnnots,
+  type MergeInput, type PdfxManifest, type StampAnnot
 } from '@pdfx/core'
 import { extractArtifacts, extractAssets, type ExtractArtifactsOptions } from '@pdfx/core/extract'
 import { watchExtract } from './watch.js'
@@ -31,6 +32,7 @@ const USAGE = `Usage:
   pdfx crop <file> --box x,y,w,h [--pages <ranges>] [--reset] -o <out.pdf> [-f] [--json]
   pdfx assets <file> -o <outDir> [--json]
   pdfx flatten <file.pdf> [-o <out.pdf>] [-f]
+  pdfx stamp <file.pdf> --image <png> --page <n> --at <x,y> --w <width> [-o <out.pdf>]
 
 Exit codes: 0 success, 1 operational error, 2 usage error.`
 
@@ -509,6 +511,94 @@ async function runFlatten(rest: string[], io: CliIo): Promise<number> {
   }
 }
 
+async function runStamp(rest: string[], io: CliIo): Promise<number> {
+  let parsed
+  try {
+    parsed = parseArgs({
+      args: rest,
+      allowPositionals: true,
+      options: {
+        image: { type: 'string' },
+        page: { type: 'string' },
+        at: { type: 'string' },
+        w: { type: 'string' },
+        out: { type: 'string', short: 'o' }
+      }
+    })
+  } catch (error) {
+    io.err(error instanceof Error ? error.message : String(error))
+    io.err(USAGE)
+    return EXIT_USAGE
+  }
+  const file = parsed.positionals[0]
+  if (!file || parsed.positionals.length > 1) {
+    io.err(USAGE)
+    return EXIT_USAGE
+  }
+  if (!parsed.values.image) {
+    io.err('pdfx stamp: --image <png> required')
+    io.err(USAGE)
+    return EXIT_USAGE
+  }
+  if (!parsed.values.at) {
+    io.err('pdfx stamp: --at <x,y> required')
+    io.err(USAGE)
+    return EXIT_USAGE
+  }
+  if (!parsed.values.w) {
+    io.err('pdfx stamp: --w <width> required')
+    io.err(USAGE)
+    return EXIT_USAGE
+  }
+
+  const atStr = parsed.values.at
+  const [xStr, yStr] = atStr.split(',')
+  const x = Number(xStr)
+  const y = Number(yStr)
+  if (Number.isNaN(x) || Number.isNaN(y) || xStr === undefined || yStr === undefined) {
+    io.err(`pdfx stamp: --at must be "x,y" in PDF points; got "${atStr}"`)
+    return EXIT_ERROR
+  }
+
+  const width = Number(parsed.values.w)
+  if (!Number.isFinite(width) || width <= 0) {
+    io.err(`pdfx stamp: --w must be a positive number; got "${parsed.values.w}"`)
+    return EXIT_ERROR
+  }
+
+  const pageNum = parsed.values.page !== undefined ? parseInt(parsed.values.page, 10) : 1
+  if (!Number.isInteger(pageNum) || pageNum < 1) {
+    io.err(`pdfx stamp: --page must be a positive integer; got "${parsed.values.page}"`)
+    return EXIT_ERROR
+  }
+
+  try {
+    const bytes = await loadInput(file)
+    const png = new Uint8Array(await readFile(parsed.values.image))
+
+    // Derive height from PNG aspect ratio via a throwaway embed to avoid distortion.
+    const probe = await PDFDocument.create()
+    const img = await probe.embedPng(png)
+    const height = width * (img.height / img.width)
+
+    const stamp: StampAnnot = {
+      type: 'stamp',
+      page: pageNum - 1, // user-facing 1-based → 0-based model
+      rect: { x, y, w: width, h: height },
+      png
+    }
+    const out = await writeStampAnnots(bytes, [stamp])
+    const outPath = parsed.values.out ?? file.replace(/\.pdf$/i, '.stamped.pdf')
+    await mkdir(dirname(outPath), { recursive: true })
+    await writeFile(outPath, out)
+    io.out(`stamp: wrote ${outPath}`)
+    return EXIT_OK
+  } catch (error) {
+    io.err(`pdfx stamp: ${error instanceof Error ? error.message : String(error)}`)
+    return EXIT_ERROR
+  }
+}
+
 export async function runCli(
   argv: string[],
   io: CliIo = { out: console.log, err: console.error }
@@ -527,6 +617,7 @@ export async function runCli(
   }
   if (verb === 'assets') return runAssets(rest, io)
   if (verb === 'flatten') return runFlatten(rest, io)
+  if (verb === 'stamp') return runStamp(rest, io)
   io.err(`Unknown command "${verb}"`)
   io.err(USAGE)
   return EXIT_USAGE
