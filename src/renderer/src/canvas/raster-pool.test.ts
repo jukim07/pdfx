@@ -235,6 +235,21 @@ describe('rasterPool.pin / unpin — visibility pinning', () => {
   it('unpin on unknown id is a no-op', () => {
     expect(() => rasterPool.unpin('nonexistent')).not.toThrow()
   })
+
+  it('register → pin → pressure: pinned entry survives eviction', () => {
+    // This test covers the post-eviction re-register scenario: page is evicted,
+    // scrolled back into view, and register+pin happen before next pressure.
+    const evictP1 = vi.fn().mockImplementation(() => rasterPool.deregister('p1'))
+    rasterPool.register('p1', 100, 200, evictP1)
+    // Page is visible; pin it immediately after register
+    rasterPool.pin('p1')
+    // Now apply pressure via a large register; p1 is pinned so must survive
+    const h = Math.ceil((BUDGET_BYTES + 1) / 4)
+    const evictBig = vi.fn().mockImplementation(() => rasterPool.deregister('big'))
+    rasterPool.register('big', 1, h, evictBig)
+    // p1 is pinned — it must not be evicted despite being LRU
+    expect(evictP1).not.toHaveBeenCalled()
+  })
 })
 
 describe('rasterPool — giant-raster self-eviction exemption', () => {

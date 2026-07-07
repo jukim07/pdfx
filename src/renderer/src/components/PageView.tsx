@@ -130,6 +130,7 @@ function PageViewImpl({
           evictRaster(baseRef)
           rasterPool.deregister(poolKey)
         })
+        if (nearRef.current) rasterPool.pin(poolKey)
       }
     }).catch(logRenderError(`Failed to render page ${pageNumber}`))
     return () => {
