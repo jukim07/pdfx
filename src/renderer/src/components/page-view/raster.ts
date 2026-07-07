@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 
 export const BASE_RASTER = 1100
@@ -115,4 +116,12 @@ export async function renderDetail({
   detailCanvas.style.top = `${(visTop - rect.top) / effScale}px`
   detailCanvas.style.width = `${visW / effScale}px`
   detailCanvas.style.height = `${visH / effScale}px`
+}
+
+/** Clears the base canvas backing store, freeing GPU/CPU memory for the raster. */
+export function evictRaster(baseRef: React.RefObject<HTMLCanvasElement | null>): void {
+  const canvas = baseRef.current
+  if (!canvas) return
+  canvas.width = 0
+  canvas.height = 0
 }

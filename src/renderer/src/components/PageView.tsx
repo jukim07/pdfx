@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
-import { BASE_RASTER, dpr, logRenderError, renderBase, renderDetail } from './page-view/raster'
+import { BASE_RASTER, dpr, evictRaster, logRenderError, renderBase, renderDetail } from './page-view/raster'
+import { rasterPool } from '../canvas/raster-pool'
 import { FindHighlight } from './find-highlight'
 import type { OcrWord } from '../ocr/types'
 import type { Annot } from '@pdfx/core'
@@ -60,22 +61,43 @@ function PageViewImpl({
   const [near, setNear] = useState(eager)
   const [baseReady, setBaseReady] = useState(false)
 
+  const poolKey = `${pdf.fingerprints[0] ?? pageNumber}:${pageNumber}`
+
   useEffect(() => {
-    if (eager) return
+    if (eager) {
+      // Eager pages don't need viewport detection; register with an evict callback
+      // so the pool can still reclaim them under budget pressure.
+      rasterPool.register(poolKey, naturalWidth, naturalHeight, () => {
+        setNear(false)
+        setBaseReady(false)
+        evictRaster(baseRef)
+        rasterPool.deregister(poolKey)
+      })
+      return () => rasterPool.deregister(poolKey)
+    }
     const el = rootRef.current
     if (!el) return
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
+        const isNear = entries.some((e) => e.isIntersecting)
+        if (isNear) {
           setNear(true)
-          observer.disconnect()
+          // Touch on re-entry to push to back of eviction queue
+          rasterPool.touch(poolKey)
+        }
+        // When going out of view entirely, raster stays — LRU pool handles eviction
+        if (!isNear && near) {
+          // page left viewport; pool decides when to evict
         }
       },
       { rootMargin: '300px' }
     )
     observer.observe(el)
-    return () => observer.disconnect()
-  }, [eager])
+    return () => {
+      observer.disconnect()
+      rasterPool.deregister(poolKey)
+    }
+  }, [eager, poolKey, naturalWidth, naturalHeight, near])
 
   useEffect(() => {
     if (!near) return
@@ -89,13 +111,21 @@ function PageViewImpl({
       baseRef,
       isCancelled: () => cancelled,
       onTask: (t) => (task = t),
-      onReady: () => setBaseReady(true)
+      onReady: () => {
+        setBaseReady(true)
+        rasterPool.register(poolKey, naturalWidth, naturalHeight, () => {
+          setNear(false)
+          setBaseReady(false)
+          evictRaster(baseRef)
+          rasterPool.deregister(poolKey)
+        })
+      }
     }).catch(logRenderError(`Failed to render page ${pageNumber}`))
     return () => {
       cancelled = true
       task?.cancel()
     }
-  }, [near, pdf, pageNumber, naturalWidth, naturalHeight])
+  }, [near, pdf, pageNumber, naturalWidth, naturalHeight, poolKey])
 
   useEffect(() => {
     if (!near) return
