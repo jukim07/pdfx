@@ -9,8 +9,11 @@ interface FindBarProps {
   ocrRemaining: number
   hasScanned: boolean
   ocrLanguage: string
+  semanticMode: boolean
+  isSearching: boolean
   onQuery: (query: string) => void
   onOcrLanguage: (lang: string) => void
+  onToggleSemanticMode: () => void
   onClose: () => void
 }
 
@@ -26,8 +29,11 @@ export function FindBar({
   ocrRemaining,
   hasScanned,
   ocrLanguage,
+  semanticMode,
+  isSearching,
   onQuery,
   onOcrLanguage,
+  onToggleSemanticMode,
   onClose
 }: FindBarProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -61,14 +67,22 @@ export function FindBar({
           }
         }}
       />
-      {ocrRemaining > 0 && (
-        <span className="findbar-status" title="Reading scanned pages">
-          Indexing…
+      {(ocrRemaining > 0 || isSearching) && (
+        <span className="findbar-status" title={isSearching ? 'Semantic search running' : 'Reading scanned pages'}>
+          {isSearching ? 'Searching…' : 'Indexing…'}
         </span>
       )}
       <span className="findbar-count" aria-live="polite">
         {countLabel(query, result)}
       </span>
+      <button
+        className={'icon-btn findbar-semantic' + (semanticMode ? ' active' : '')}
+        title={semanticMode ? 'Semantic search on (click to disable)' : 'Enable semantic search'}
+        onClick={onToggleSemanticMode}
+        aria-pressed={semanticMode}
+      >
+        ✦
+      </button>
       {hasScanned && (
         <select
           className="findbar-lang"

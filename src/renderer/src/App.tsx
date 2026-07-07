@@ -17,6 +17,7 @@ import { useKeyboardShortcuts } from './app/useKeyboardShortcuts'
 import { useFind } from './app/useFind'
 import { useTestBridge } from './app/test-bridge'
 import { useSearchIndex } from './search/useSearchIndex'
+import { useSemanticSearch } from './search/useSemanticSearch'
 import { FindProvider } from './search/FindContext'
 import { FindBar } from './components/FindBar'
 import { CropRangeDialog } from './components/CropRangeDialog'
@@ -271,7 +272,17 @@ export default function App(): React.JSX.Element {
   const layout = useMemo(() => computeLayout(docs, axisFlip), [docs, axisFlip])
 
   const searchIndex = useSearchIndex(docs)
-  const find = useFind(searchIndex.search, searchIndex.version)
+  const [semanticMode, setSemanticMode] = useState(false)
+  const { semanticSearch } = useSemanticSearch(
+    searchIndex.getPageTexts(),
+    searchIndex.search,
+    docs
+  )
+  const find = useFind(
+    searchIndex.search,
+    searchIndex.version,
+    semanticMode ? semanticSearch : undefined
+  )
   const findState = useMemo(
     () => ({
       active: find.active,
@@ -471,8 +482,11 @@ export default function App(): React.JSX.Element {
             ocrRemaining={searchIndex.ocrRemaining}
             hasScanned={searchIndex.hasScanned}
             ocrLanguage={searchIndex.ocrLanguage}
+            semanticMode={semanticMode}
+            isSearching={find.isSearching}
             onQuery={find.setQuery}
             onOcrLanguage={searchIndex.setOcrLanguage}
+            onToggleSemanticMode={() => setSemanticMode((v) => !v)}
             onClose={find.closeFind}
           />
         )}

@@ -14,6 +14,7 @@ export interface SearchIndex {
   ocrLanguage: string
   setOcrLanguage: (lang: string) => void
   getOcrWords: (sourceKey: string) => OcrWord[] | undefined
+  getPageTexts: () => ReadonlyMap<string, string>
 }
 
 export function useSearchIndex(docs: DocEntry[]): SearchIndex {
@@ -51,6 +52,7 @@ export function useSearchIndex(docs: DocEntry[]): SearchIndex {
 
   const search = useCallback((query: string) => engine.search(query), [engine])
   const getOcrWords = useCallback((sourceKey: string) => engine.getOcrWords(sourceKey), [engine])
+  const getPageTexts = useCallback(() => engine.getPageTexts(), [engine])
 
   const setOcrLanguage = useCallback(
     (lang: string) => {
@@ -60,5 +62,5 @@ export function useSearchIndex(docs: DocEntry[]): SearchIndex {
     [engine]
   )
 
-  return { search, version, ocrRemaining, hasScanned, ocrLanguage, setOcrLanguage, getOcrWords }
+  return { search, version, ocrRemaining, hasScanned, ocrLanguage, setOcrLanguage, getOcrWords, getPageTexts }
 }

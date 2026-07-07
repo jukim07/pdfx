@@ -25,6 +25,7 @@ export interface SearchEngine {
   search: (query: string) => SearchResult
   setLanguage: (lang: string) => void
   getOcrWords: (sourceKey: string) => OcrWord[] | undefined
+  getPageTexts: () => ReadonlyMap<string, string>
   dispose: () => void
 }
 
@@ -261,6 +262,10 @@ export function createSearchEngine({
 
     getOcrWords(sourceKey) {
       return sourceOcrWords.get(sourceKey)
+    },
+
+    getPageTexts() {
+      return pageText as ReadonlyMap<string, string>
     },
 
     dispose() {
