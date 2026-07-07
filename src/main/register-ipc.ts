@@ -222,6 +222,11 @@ export function registerIpc(getPending: () => string[], clearPending: () => void
     if (typeof json !== 'string' || json.length > 1024 * 1024) {
       throw new Error('write-settings: refusing invalid payload')
     }
+    try {
+      JSON.parse(json)
+    } catch {
+      throw new Error('write-settings: refusing invalid JSON')
+    }
     const p = join(app.getPath('userData'), 'pdfx-settings.json')
     await writeFile(p, json, 'utf-8')
   })

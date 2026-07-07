@@ -7,6 +7,25 @@ interface WorkspaceState {
 const DEBOUNCE_MS = 2000
 
 /**
+ * Parse a raw settings JSON string and return the paths to restore.
+ * Returns [] for any malformed, missing, or invalid input — callers never
+ * need to guard. Non-string entries are silently dropped (defensive against
+ * a partially-corrupted file).
+ *
+ * Exported for unit testing; not part of the public hook API.
+ */
+export function parseRestorePaths(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const state = JSON.parse(raw) as WorkspaceState
+    if (!Array.isArray(state.openPaths)) return []
+    return state.openPaths.filter((p): p is string => typeof p === 'string')
+  } catch {
+    return []
+  }
+}
+
+/**
  * Autosaves the list of open file paths to userData/pdfx-settings.json on a
  * 2s debounce, and restores them on first mount by calling onRestore.
  *
@@ -29,13 +48,10 @@ export function useWorkspace(
     void (async () => {
       try {
         const raw = await window.api.readSettings()
-        if (!raw) return
-        const state = JSON.parse(raw) as WorkspaceState
-        if (Array.isArray(state.openPaths) && state.openPaths.length > 0) {
-          onRestore(state.openPaths.filter((p) => typeof p === 'string'))
-        }
+        const paths = parseRestorePaths(raw)
+        if (paths.length > 0) onRestore(paths)
       } catch {
-        // Malformed JSON or missing file — start fresh
+        // IPC error (e.g. dev mode without main) — start fresh
       }
     })()
     // onRestore is stable (useCallback in App.tsx); eslint-disable intentional.
