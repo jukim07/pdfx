@@ -21,6 +21,10 @@ asarUnpack:
 extraResources:
   - from: resources/ocr
     to: ocr
+  # rebuildLegible resolves the OpenDyslexic font at process.resourcesPath/fonts
+  # in packaged builds (getOpenDyslexicPath in @pdfx/core watermark.ts).
+  - from: resources/fonts
+    to: fonts
 fileAssociations:
   - ext: pdfx
     name: PDFX Collection
