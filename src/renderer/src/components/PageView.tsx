@@ -63,6 +63,11 @@ function PageViewImpl({
 
   const poolKey = `${pdf.fingerprints[0] ?? pageNumber}:${pageNumber}`
 
+  // Track near in a ref so the observer callback can read the current value
+  // without being a dep — the observer must live for the component lifetime.
+  const nearRef = useRef(eager)
+  nearRef.current = near
+
   useEffect(() => {
     if (eager) {
       // Eager pages don't need viewport detection; register with an evict callback
@@ -73,7 +78,11 @@ function PageViewImpl({
         evictRaster(baseRef)
         rasterPool.deregister(poolKey)
       })
-      return () => rasterPool.deregister(poolKey)
+      rasterPool.pin(poolKey)
+      return () => {
+        rasterPool.unpin(poolKey)
+        rasterPool.deregister(poolKey)
+      }
     }
     const el = rootRef.current
     if (!el) return
@@ -82,22 +91,24 @@ function PageViewImpl({
         const isNear = entries.some((e) => e.isIntersecting)
         if (isNear) {
           setNear(true)
+          nearRef.current = true
+          rasterPool.pin(poolKey)
           // Touch on re-entry to push to back of eviction queue
           rasterPool.touch(poolKey)
+        } else {
+          rasterPool.unpin(poolKey)
         }
         // When going out of view entirely, raster stays — LRU pool handles eviction
-        if (!isNear && near) {
-          // page left viewport; pool decides when to evict
-        }
       },
       { rootMargin: '300px' }
     )
     observer.observe(el)
     return () => {
       observer.disconnect()
+      rasterPool.unpin(poolKey)
       rasterPool.deregister(poolKey)
     }
-  }, [eager, poolKey, naturalWidth, naturalHeight, near])
+  }, [eager, poolKey, naturalWidth, naturalHeight])
 
   useEffect(() => {
     if (!near) return

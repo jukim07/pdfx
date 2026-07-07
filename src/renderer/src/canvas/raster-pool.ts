@@ -5,6 +5,7 @@ interface Entry {
   bytes: number
   evict: () => void
   lastUsed: number
+  pinned: boolean
 }
 
 let seq = 0
@@ -20,9 +21,11 @@ export const rasterPool = {
       return
     }
     const bytes = width * height * 4
-    pool.set(pageId, { pageId, bytes, evict, lastUsed: ++seq })
+    pool.set(pageId, { pageId, bytes, evict, lastUsed: ++seq, pinned: false })
     totalBytes += bytes
-    rasterPool.evictIfNeeded()
+    // The entry just registered is exempt from its own eviction pass — evict others
+    // first; if still over budget, accept soft-over (visible page must render).
+    rasterPool._evictIfNeeded(pageId)
   },
 
   /** Call when a page is scrolled out and its raster has been cleared. */
@@ -39,15 +42,42 @@ export const rasterPool = {
     if (entry) entry.lastUsed = ++seq
   },
 
+  /**
+   * Pin a page so it is skipped during eviction. Call when the page enters the
+   * viewport; call unpin when it leaves. Pinning an unregistered id is a no-op.
+   */
+  pin(pageId: string): void {
+    const entry = pool.get(pageId)
+    if (entry) entry.pinned = true
+  },
+
+  /**
+   * Release a pin. Unpinning an unknown/unregistered id is a no-op.
+   * After unpin, the entry participates in normal LRU eviction.
+   */
+  unpin(pageId: string): void {
+    const entry = pool.get(pageId)
+    if (entry) entry.pinned = false
+  },
+
   evictIfNeeded(): void {
+    rasterPool._evictIfNeeded(null)
+  },
+
+  /** Internal: evict passing an exempt id (null = no exemption). */
+  _evictIfNeeded(exemptId: string | null): void {
     if (totalBytes <= BUDGET_BYTES) return
     // Sort by lastUsed ascending — evict the LRU entry first
     const entries = [...pool.values()].sort((a, b) => a.lastUsed - b.lastUsed)
     for (const entry of entries) {
       if (totalBytes <= BUDGET_BYTES) break
+      // Skip pinned entries and the entry currently being registered
+      if (entry.pinned || entry.pageId === exemptId) continue
       entry.evict()
       // deregister is called by the evict callback (inside PageView's cleanup)
     }
+    // If still over budget (all remaining entries pinned or exempt): accept soft-over.
+    // Visible pages always win.
   },
 
   /** Exposed for testing only — returns current total bytes tracked by the pool. */
